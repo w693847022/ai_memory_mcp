@@ -1,0 +1,47 @@
+# 使用 Ubuntu 作为基础镜像
+FROM ubuntu:22.04
+
+# 避免交互式提示
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MCP_TRANSPORT=streamable-http \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=8000
+
+# 安装 Python 3.12
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y python3.12 python3.12-venv python3.12-dev python3-pip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 创建 python 符号链接
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# 复制依赖文件
+COPY requirements.txt .
+
+# 安装 Python 依赖
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制项目文件
+COPY src/ ./src/
+COPY run.py .
+
+# 创建数据目录
+RUN mkdir -p /app/data && \
+    chmod 777 /app/data
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动命令
+CMD ["python", "run.py", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]

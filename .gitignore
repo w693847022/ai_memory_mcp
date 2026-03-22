@@ -1,0 +1,39 @@
+# Python虚拟环境
+venv/
+env/
+ENV/
+
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 测试和覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 项目记忆数据（可选，如果不想提交本地数据）
+.project_memory.json
+.project_memory_ai/
+
+# 临时文件
+*.log
+*.tmp
+.DS_Store
+
+# 测试数据
+/tmp/
+
+# Docker 环境配置
+docker/.env
+CLAUDE.md

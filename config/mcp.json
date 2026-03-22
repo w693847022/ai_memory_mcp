@@ -1,0 +1,9 @@
+{
+  "_comment": "项目本地记忆 MCP 服务器配置",
+  "project-memory": {
+    "command": "python",
+    "args": ["run.py"],
+    "cwd": "/home/wrs/code/mcp_test",
+    "env": {}
+  }
+}

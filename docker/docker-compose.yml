@@ -1,0 +1,40 @@
+services:
+  mcp-memory-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mcp-memory-server
+    restart: unless-stopped
+    # 使用宿主机用户运行，避免文件权限问题
+    user: "${UID:-1002}:${GID:-1002}"
+    ports:
+      - "${MCP_PORT:-8000}:8000"
+    environment:
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-streamable-http}
+      - MCP_HOST=${MCP_HOST:-0.0.0.0}
+      - MCP_PORT=${MCP_PORT:-8000}
+      - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
+      - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
+    volumes:
+      # 挂载项目记忆数据目录（持久化）- 使用绝对路径避免 snap Docker 路径重定向
+      - /home/wrs/.project_memory_ai:/app/.project_memory_ai
+      # 挂载源代码（开发模式热更新）
+      - ../src:/app/src:ro
+      - ../run.py:/app/run.py:ro
+    networks:
+      - mcp-network
+    # 健康检查已禁用 - MCP SSE端点需要session ID，无法简单检查
+    # healthcheck:
+    #   test: ["CMD", "python", "-c", "import urllib.request; req = urllib.request.Request('http://localhost:8000/mcp', headers={'Accept': 'text/event-stream'}); urllib.request.urlopen(req, timeout=5)"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
+    labels:
+      - "com.mcp-memory.description=Project Memory MCP Server"
+      - "com.mcp-memory.version=1.0.0"
+
+networks:
+  mcp-network:
+    driver: bridge
+    name: mcp-memory-network
