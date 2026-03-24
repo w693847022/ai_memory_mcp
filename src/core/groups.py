@@ -139,12 +139,13 @@ def validate_severity(severity: str) -> tuple[bool, Optional[str]]:
     return False, f"无效的 severity 值: {severity} (有效值: critical/high/medium/low)"
 
 
-def validate_content_length(content: str, group_name: str) -> tuple[bool, Optional[str], Optional[int]]:
+def validate_content_length(content: str, group_name: str, min_tokens: Optional[int] = 1) -> tuple[bool, Optional[str], Optional[int]]:
     """验证内容长度.
 
     Args:
         content: 内容
         group_name: 组名称
+        min_tokens: 最小 token 数（可选）
 
     Returns:
         (是否有效, 错误信息, 预估token数)
@@ -156,17 +157,21 @@ def validate_content_length(content: str, group_name: str) -> tuple[bool, Option
     max_tokens = config.content.max_tokens
     estimated_tokens = len(content) / 3  # 简化的 token 估算
 
+    if min_tokens is not None and estimated_tokens < min_tokens:
+        return False, f"内容过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）", int(estimated_tokens)
+
     if estimated_tokens > max_tokens:
         return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens", int(estimated_tokens)
     return True, None, int(estimated_tokens)
 
 
-def validate_summary_length(summary: str, group_name: str) -> tuple[bool, Optional[str], Optional[int]]:
+def validate_summary_length(summary: str, group_name: str, min_tokens: Optional[int] = 1) -> tuple[bool, Optional[str], Optional[int]]:
     """验证摘要长度.
 
     Args:
         summary: 摘要
         group_name: 组名称
+        min_tokens: 最小 token 数（可选）
 
     Returns:
         (是否有效, 错误信息, 预估token数)
@@ -177,6 +182,9 @@ def validate_summary_length(summary: str, group_name: str) -> tuple[bool, Option
 
     max_tokens = config.summary.max_tokens
     estimated_tokens = len(summary) / 3
+
+    if min_tokens is not None and estimated_tokens < min_tokens:
+        return False, f"摘要过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）", int(estimated_tokens)
 
     if estimated_tokens > max_tokens:
         return False, f"摘要过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens", int(estimated_tokens)

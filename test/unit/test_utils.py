@@ -34,24 +34,23 @@ def test_id_generation():
 
 
 def test_group_normalization():
-    """测试分组标准化."""
-    print("测试: 分组标准化...")
+    """测试分组验证."""
+    print("测试: 分组验证...")
 
-    # 测试中文别名
-    aliases_map = {
-        "features": ["features", "feature", "功能", "feat"],
-        "fixes": ["fixes", "fix", "修复", "bugfix"],
-        "notes": ["notes", "note", "笔记"],
-        "standards": ["standards", "standard", "规范", "标准"]
-    }
+    from core.groups import validate_group_name
 
-    for normalized, variants in aliases_map.items():
-        for variant in variants:
-            from features.tools import _normalize_group
-            result = _normalize_group(variant)
-            assert result == normalized, f"'{variant}' 应该标准化为 '{normalized}'"
+    # 测试有效分组名
+    for group in ["features", "fixes", "notes", "standards"]:
+        is_valid, error_msg = validate_group_name(group)
+        assert is_valid, f"'{group}' 应该是有效的分组名"
 
-    print("  ✓ 分组标准化测试通过")
+    # 测试无效分组名（不再支持别名）
+    invalid_names = ["feature", "fix", "功能", "feat", "invalid"]
+    for invalid in invalid_names:
+        is_valid, error_msg = validate_group_name(invalid)
+        assert not is_valid, f"'{invalid}' 应该是无效的分组名"
+
+    print("  ✓ 分组验证测试通过")
     return True
 
 
@@ -81,16 +80,24 @@ def test_content_validation():
     """测试内容长度验证."""
     print("测试: 内容长度验证...")
 
-    from features.tools import _validate_content_length
+    from core.groups import validate_content_length
 
     # 测试有效内容
-    valid, msg = _validate_content_length("短内容", max_tokens=30)
+    valid, msg, _ = validate_content_length("短内容", "features")
     assert valid, f"短内容应该有效: {msg}"
 
-    # 测试过长内容
-    long_content = "a" * 100
-    valid, msg = _validate_content_length(long_content, max_tokens=30)
+    # 测试过长内容 (features: 80 tokens = ~240 chars)
+    long_content = "a" * 300
+    valid, msg, _ = validate_content_length(long_content, "features")
     assert not valid, "过长内容应该无效"
+
+    # 测试 notes 分组的 1 token 最小长度 (3字符 ≈ 1 token)
+    valid, msg, _ = validate_content_length("aaa", "notes", min_tokens=1)
+    assert valid, f"3字符应该满足 min_tokens=1: {msg}"
+
+    # 测试不满足最小长度
+    valid, msg, _ = validate_content_length("a", "notes", min_tokens=1)
+    assert not valid, "1字符不应该满足 min_tokens=1"
 
     print("  ✓ 内容长度验证测试通过")
     return True
