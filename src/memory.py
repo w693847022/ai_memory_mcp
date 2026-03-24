@@ -6,7 +6,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union
 import threading
 from cachetools import TTLCache
 
@@ -40,17 +40,18 @@ DEFAULT_TAGS = [
 class CallStats:
     """接口调用统计类."""
 
-    def __init__(self, storage_dir: str = None):
+    def __init__(self, storage_dir: Union[str, Path, None] = None):
         """初始化调用统计管理器.
 
         Args:
             storage_dir: 存储目录路径，默认为 ~/.project_memory_ai/
         """
         if storage_dir is None:
-            home = Path.home()
-            storage_dir = home / ".project_memory_ai"
+            storage_dir = Path.home() / ".project_memory_ai"
+        else:
+            storage_dir = Path(storage_dir)
 
-        self.storage_dir = Path(storage_dir)
+        self.storage_dir = storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         self.stats_path = self.storage_dir / "_stats.json"
@@ -83,7 +84,7 @@ class CallStats:
         except IOError:
             return False
 
-    def record_call(self, tool_name: str, project_id: str = None,
+    def record_call(self, tool_name: str, project_id: Optional[str] = None,
                     client: str = "unknown", ip: str = "local") -> bool:
         """记录一次接口调用.
 
@@ -150,7 +151,7 @@ class CallStats:
             except Exception:
                 return False
 
-    def get_tool_stats(self, tool_name: str = None) -> Dict[str, Any]:
+    def get_tool_stats(self, tool_name: Optional[str] = None) -> Dict[str, Any]:
         """获取工具统计.
 
         Args:
@@ -248,7 +249,7 @@ class CallStats:
                 "ips": sorted(ip_stats.items(), key=lambda x: x[1], reverse=True)
             }
 
-    def get_daily_stats(self, date: str = None) -> Dict[str, Any]:
+    def get_daily_stats(self, date: Optional[str] = None) -> Dict[str, Any]:
         """获取每日统计.
 
         Args:
@@ -326,7 +327,7 @@ class CallStats:
 
         return removed_count
 
-    def _cleanup_old_stats(self, retention_days: int = None) -> Dict[str, Any]:
+    def _cleanup_old_stats(self, retention_days: Optional[int] = None) -> Dict[str, Any]:
         """清理过期的统计数据.
 
         Args:
@@ -410,7 +411,7 @@ class CallStats:
             "cutoff_date": cutoff_date
         }
 
-    def cleanup_stats(self, retention_days: int = None) -> Dict[str, Any]:
+    def cleanup_stats(self, retention_days: Optional[int] = None) -> Dict[str, Any]:
         """手动清理统计数据（MCP工具接口）.
 
         Args:
@@ -572,7 +573,7 @@ def get_config_file_name(path: str) -> Optional[str]:
     try:
         import tomllib  # Python 3.11+
     except ImportError:
-        import tomli as tomllib  # fallback for older Python versions
+        import tomli as tomllib  # fallback for older Python versions  # type: ignore[import]
 
     # 检查 package.json
     package_json = Path(path) / "package.json"
@@ -630,8 +631,8 @@ def get_config_file_name(path: str) -> Optional[str]:
     cargo_toml = Path(path) / "Cargo.toml"
     if cargo_toml.exists():
         try:
-            with open(cargo_toml, "r", encoding="utf-8") as f:
-                data = toml.load(f)
+            with open(cargo_toml, "rb") as f:
+                data = tomllib.load(f)
                 if "package" in data and "name" in data["package"]:
                     return data["package"]["name"]
         except (Exception):
@@ -643,17 +644,18 @@ def get_config_file_name(path: str) -> Optional[str]:
 class ProjectMemory:
     """项目记忆管理类 - 每个项目单独存储一个文件."""
 
-    def __init__(self, storage_dir: str = None):
+    def __init__(self, storage_dir: Union[str, Path, None] = None):
         """初始化项目记忆管理器.
 
         Args:
             storage_dir: 存储目录路径，默认为 ~/.project_memory_ai/
         """
         if storage_dir is None:
-            home = Path.home()
-            storage_dir = home / ".project_memory_ai"
+            storage_dir = Path.home() / ".project_memory_ai"
+        else:
+            storage_dir = Path(storage_dir)
 
-        self.storage_dir = Path(storage_dir)
+        self.storage_dir = storage_dir
         # 确保存储目录存在
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1031,7 +1033,7 @@ class ProjectMemory:
         self,
         old_path: Path,
         new_path: Path,
-        project_name: str = None
+        project_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """安全迁移项目目录：新建→拷贝→归档。
 
@@ -1104,7 +1106,7 @@ class ProjectMemory:
                 "error": f"目录迁移失败: {str(e)}"
             }
 
-    def _delete_archive_file(self, archived_path: str) -> bool:
+    def _delete_archive_file(self, archived_path: Optional[str]) -> bool:
         """删除归档文件（不阻塞）。
 
         重命名成功后自动删除归档文件，删除失败不影响重命名结果。
@@ -1168,7 +1170,7 @@ class ProjectMemory:
 
         return None
 
-    def _generate_item_id(self, prefix: str, project_id: str = None, project_data: Dict = None) -> str:
+    def _generate_item_id(self, prefix: str, project_id: Optional[str] = None, project_data: Optional[Dict] = None) -> str:
         """生成条目唯一ID.
 
         Args:
@@ -1218,11 +1220,11 @@ class ProjectMemory:
     def register_project(
         self,
         name: str,
-        path: str = None,
+        path: Optional[str] = None,
         summary: str = "",
-        tags: List[str] = None,
-        git_remote: str = None,
-        git_remote_url: str = None
+        tags: Optional[List[str]] = None,
+        git_remote: Optional[str] = None,
+        git_remote_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """注册新项目.
 
@@ -1382,7 +1384,7 @@ class ProjectMemory:
     # ==================== 功能记录 ====================
 
     def add_feature(self, project_id: str, content: str, summary: str,
-                    status: str = "pending", tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
+                    status: str = "pending", tags: Optional[List[str]] = None, note_id: Optional[str] = None) -> Dict[str, Any]:
         """添加功能记录.
 
         Args:
@@ -1447,8 +1449,8 @@ class ProjectMemory:
     # ==================== Bug修复记录 ====================
 
     def add_fix(self, project_id: str, content: str, summary: str, status: str = "pending",
-                severity: str = "medium", related_feature: str = None,
-                note_id: str = None, tags: List[str] = None) -> Dict[str, Any]:
+                severity: str = "medium", related_feature: Optional[str] = None,
+                note_id: Optional[str] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """添加bug修复记录.
 
         Args:
@@ -1525,9 +1527,9 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_fix(self, project_id: str, fix_id: str, content: str = None, summary: str = None,
-                   status: str = None, severity: str = None, related_feature: str = None,
-                   note_id: str = None, tags: List[str] = None) -> Dict[str, Any]:
+    def update_fix(self, project_id: str, fix_id: str, content: Optional[str] = None, summary: Optional[str] = None,
+                   status: Optional[str] = None, severity: Optional[str] = None, related_feature: Optional[str] = None,
+                   note_id: Optional[str] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """更新bug修复记录.
 
         Args:
@@ -1661,7 +1663,7 @@ class ProjectMemory:
 
     # ==================== 开发笔记 ====================
 
-    def add_note(self, project_id: str, note: str, tags: List[str] = None, summary: str = "") -> Dict[str, Any]:
+    def add_note(self, project_id: str, note: str, tags: Optional[List[str]] = None, summary: str = "") -> Dict[str, Any]:
         """添加开发笔记.
 
         Args:
@@ -1720,7 +1722,7 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def add_standard(self, project_id: str, content: str, tags: List[str] = None, summary: str = "") -> Dict[str, Any]:
+    def add_standard(self, project_id: str, content: str, tags: Optional[List[str]] = None, summary: str = "") -> Dict[str, Any]:
         """添加项目规范.
 
         Args:
@@ -1826,7 +1828,7 @@ class ProjectMemory:
 
     # ==================== 搜索功能 ====================
 
-    def search(self, keyword: str = "", tags: List[str] = None) -> Dict[str, Any]:
+    def search(self, keyword: str = "", tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """搜索项目.
 
         Args:
@@ -2185,7 +2187,7 @@ class ProjectMemory:
         return {"success": True}
 
     def register_tag(self, project_id: str, tag_name: str,
-                     summary: str, aliases: List[str] = None) -> Dict[str, Any]:
+                     summary: str, aliases: Optional[List[str]] = None) -> Dict[str, Any]:
         """注册新标签到项目标签库.
 
         Args:
@@ -2247,7 +2249,7 @@ class ProjectMemory:
         return {"success": False, "error": "保存数据失败"}
 
     def update_tag(self, project_id: str, tag_name: str,
-                   summary: str = None) -> Dict[str, Any]:
+                   summary: Optional[str] = None) -> Dict[str, Any]:
         """更新已注册标签的语义信息.
 
         Args:
@@ -2497,8 +2499,8 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_feature(self, project_id: str, feature_id: str, content: str = None,
-                       summary: str = None, status: str = None, tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
+    def update_feature(self, project_id: str, feature_id: str, content: Optional[str] = None,
+                       summary: Optional[str] = None, status: Optional[str] = None, tags: Optional[List[str]] = None, note_id: Optional[str] = None) -> Dict[str, Any]:
         """更新功能条目（内容、摘要、状态、标签、note_id）.
 
         Args:
@@ -2643,7 +2645,7 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_note(self, project_id: str, note_id: str, content: str = None, tags: List[str] = None, summary: str = None) -> Dict[str, Any]:
+    def update_note(self, project_id: str, note_id: str, content: Optional[str] = None, tags: Optional[List[str]] = None, summary: Optional[str] = None) -> Dict[str, Any]:
         """更新笔记条目（摘要、内容、标签）.
 
         Args:
@@ -2730,7 +2732,7 @@ class ProjectMemory:
 
         return {"success": False, "error": f"笔记ID '{note_id}' 不存在"}
 
-    def update_standard(self, project_id: str, standard_id: str, content: str = None, tags: List[str] = None, summary: str = None) -> Dict[str, Any]:
+    def update_standard(self, project_id: str, standard_id: str, content: Optional[str] = None, tags: Optional[List[str]] = None, summary: Optional[str] = None) -> Dict[str, Any]:
         """更新规范条目（摘要、内容、标签）.
 
         Args:
@@ -3052,7 +3054,7 @@ class ProjectMemory:
 
     # ==================== 导入导出 ====================
 
-    def export_data(self, output_path: str = None) -> Dict[str, Any]:
+    def export_data(self, output_path: Union[str, Path, None] = None) -> Dict[str, Any]:
         """导出所有项目数据.
 
         Args:
@@ -3062,12 +3064,12 @@ class ProjectMemory:
             操作结果
         """
         if output_path is None:
-            output_path = Path.cwd() / f"project_memory_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            output_file = Path.cwd() / f"project_memory_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         else:
-            output_path = Path(output_path)
+            output_file = Path(output_path)
 
         try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
 
             # 收集所有项目数据
             all_projects = {}
@@ -3086,18 +3088,18 @@ class ProjectMemory:
                 }
             }
 
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
 
             return {
                 "success": True,
-                "message": f"数据已导出到 {output_path}",
-                "path": str(output_path)
+                "message": f"数据已导出到 {output_file}",
+                "path": str(output_file)
             }
         except IOError as e:
             return {"success": False, "error": f"导出失败: {str(e)}"}
 
-    def import_data(self, input_path: str, merge: bool = False) -> Dict[str, Any]:
+    def import_data(self, input_path: Union[str, Path], merge: bool = False) -> Dict[str, Any]:
         """导入项目数据.
 
         Args:
@@ -3107,13 +3109,13 @@ class ProjectMemory:
         Returns:
             操作结果
         """
-        input_path = Path(input_path)
+        input_file = Path(input_path)
 
-        if not input_path.exists():
-            return {"success": False, "error": f"文件不存在: {input_path}"}
+        if not input_file.exists():
+            return {"success": False, "error": f"文件不存在: {input_file}"}
 
         try:
-            with open(input_path, "r", encoding="utf-8") as f:
+            with open(input_file, "r", encoding="utf-8") as f:
                 imported_data = json.load(f)
 
             # 支持旧格式（包含 "projects" 键）和新格式

@@ -246,7 +246,7 @@ def project_add(
     group: str,
     content: str = "",
     summary: str = "",
-    status: str = None,  # 哨兵值，用于检测是否显式传入
+    status: Optional[str] = None,  # 哨兵值，用于检测是否显式传入
     severity: str = "medium",
     related_feature: str = "",
     note_id: str = "",
@@ -280,7 +280,7 @@ def project_add(
 
     # status 参数验证（仅 features/fixes 分组必填）
     config = get_group_config(group)
-    if config.status_values:
+    if config and config.status_values:
         if status is None:
             response = ApiResponse(success=False, error="features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)")
             return response.to_json()
@@ -335,9 +335,9 @@ def project_add(
             project_id,
             content,  # feature content
             summary,  # feature summary (overview)
-            status,
+            status or "pending",
             tag_list,
-            note_id or None
+            note_id if note_id else None
         )
         if result["success"]:
             data = {
@@ -363,10 +363,10 @@ def project_add(
             project_id,
             content,  # fix content
             summary,  # fix summary (overview)
-            status,
+            status or "pending",
             severity,
-            related_feature or None,
-            note_id or None,
+            related_feature if related_feature else None,
+            note_id if note_id else None,
             tag_list
         )
         if result["success"]:
@@ -438,18 +438,23 @@ def project_add(
         response = ApiResponse(success=False, error=result.get('error', '未知错误'))
         return response.to_json()
 
+    else:
+        # 无效的 group 类型（理论上不会走到这里，因为前面已验证）
+        response = ApiResponse(success=False, error=f"无效的分组类型: {group}")
+        return response.to_json()
+
 
 def project_update(
     project_id: str,
     group: str,
     item_id: str,
-    content: str = None,
-    summary: str = None,
-    status: str = None,
-    severity: str = None,
-    related_feature: str = None,
-    note_id: str = None,
-    tags: str = None
+    content: Optional[str] = None,
+    summary: Optional[str] = None,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    related_feature: Optional[str] = None,
+    note_id: Optional[str] = None,
+    tags: Optional[str] = None
 ) -> str:
     """更新项目条目（统一接口）.
 
@@ -600,6 +605,11 @@ def project_update(
             response = ApiResponse(success=True, data=data, message=result['message'])
             return response.to_json()
         response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+        return response.to_json()
+
+    else:
+        # 无效的 group 类型（理论上不会走到这里，因为前面已验证）
+        response = ApiResponse(success=False, error=f"无效的分组类型: {group}")
         return response.to_json()
 
 
@@ -798,7 +808,7 @@ def tag_register(
 def tag_update(
     project_id: str,
     tag_name: str,
-    summary: str = ""
+    summary: Optional[str] = ""
 ) -> str:
     """更新已注册标签的语义信息.
 
