@@ -10,10 +10,24 @@ from typing import Optional
 try:
     from ..core.config import memory, call_stats
     from ..core.utils import track_calls
+    from ..core.groups import (
+        validate_group_name,
+        validate_status,
+        validate_content_length as groups_validate_content_length,
+        validate_summary_length,
+        get_group_config,
+    )
     from ..models.response import ApiResponse
 except ImportError:
     from core.config import memory, call_stats
     from core.utils import track_calls
+    from core.groups import (
+        validate_group_name,
+        validate_status,
+        validate_content_length as groups_validate_content_length,
+        validate_summary_length,
+        get_group_config,
+    )
     from models.response import ApiResponse
 
 
@@ -54,7 +68,7 @@ def _parse_tags(tags_str: str) -> list:
     return [t.strip() for t in tags_str.split(",") if t.strip()]
 
 
-def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: int = None) -> tuple[bool, str]:
+def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: "Optional[int]" = None) -> tuple[bool, str]:
     """验证内容长度（基于 token 估算）.
 
     Args:
@@ -279,89 +293,6 @@ def project_tags_info(
         return response.to_json()
 
 
-
-def _normalize_group(group: str) -> str:
-    """标准化 group 参数.
-
-    支持中英文别名：
-    - features: "features", "feature", "功能", "feat"
-    - fixes: "fixes", "fix", "修复", "bugfix"
-    - notes: "notes", "note", "笔记"
-    - standards: "standards", "standard", "规范", "标准"
-    """
-    group_lower = group.lower().strip()
-
-    # 中文别名映射
-    aliases = {
-        "features": ["features", "feature", "功能", "feat"],
-        "fixes": ["fixes", "fix", "修复", "bugfix"],
-        "notes": ["notes", "note", "笔记"],
-        "standards": ["standards", "standard", "规范", "标准"]
-    }
-
-    for normalized, variants in aliases.items():
-        if group_lower in [v.lower() for v in variants]:
-            return normalized
-
-    return group_lower  # 返回原值，让调用者处理错误
-
-
-def _parse_tags(tags_str: str) -> list:
-    """解析标签字符串为列表."""
-    if not tags_str:
-        return []
-    return [t.strip() for t in tags_str.split(",") if t.strip()]
-
-
-def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: int = None) -> tuple[bool, str]:
-    """验证内容长度（基于 token 估算）.
-
-    Args:
-        content: 要验证的内容
-        max_tokens: 最大 token 数
-        min_tokens: 最小 token 数（可选）
-
-    Returns:
-        (是否有效, 错误信息)
-    """
-    if not content:
-        return False, "内容不能为空"
-
-    # 简化的 token 估算：1 token ≈ 3 字符（中英文混合平均）
-    estimated_tokens = len(content) / 3
-
-    # 最小长度验证
-    if min_tokens is not None and estimated_tokens < min_tokens:
-        return False, f"内容过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）"
-
-    # 最大长度验证
-    if estimated_tokens > max_tokens:
-        return False, f"超出长度限制,当前 {int(estimated_tokens)} tokens,限制为 {max_tokens} tokens.请拆分文档内容或精简."
-    return True, ""
-
-
-def _validate_tag_length(tag: str, max_tokens: int = 10) -> tuple[bool, str]:
-    """验证单个标签长度（基于 token 估算）.
-
-    Args:
-        tag: 要验证的标签
-        max_tokens: 最大 token 数
-
-    Returns:
-        (是否有效, 错误信息)
-    """
-    if not tag:
-        return False, "标签不能为空"
-
-    # 简化的 token 估算：1 token ≈ 3 字符
-    estimated_tokens = len(tag) / 3
-
-    if estimated_tokens > max_tokens:
-        return False, f"标签 '{tag}' 过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
-    return True, ""
-
-
-
 def project_add(
     project_id: str,
     group: str,
@@ -397,17 +328,20 @@ def project_add(
     group_normalized = _normalize_group(group)
 
     # 验证 group 有效性
-    if group_normalized not in ["features", "fixes", "notes", "standards"]:
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group} (支持: features/fixes/notes/standards 或 功能/修复/笔记/规范)")
+    is_valid, error_msg = validate_group_name(group_normalized)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
     # status 参数验证（仅 features/fixes 分组必填）
-    if group_normalized in ["features", "fixes"]:
+    config = get_group_config(group_normalized)
+    if config.status_values:
         if status is None:
             response = ApiResponse(success=False, error="features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)")
             return response.to_json()
-        if status not in ["pending", "in_progress", "completed"]:
-            response = ApiResponse(success=False, error=f"无效的 status 值: {status} (有效值: pending/in_progress/completed)")
+        is_valid, error_msg = validate_status(status, group_normalized)
+        if not is_valid:
+            response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
     else:
         # notes/standards 忽略 status 参数
@@ -418,20 +352,10 @@ def project_add(
         response = ApiResponse(success=False, error="content 参数不能为空")
         return response.to_json()
 
-    # 根据 group 类型设置不同的 max_tokens
-    # features/fixes/standards: 30 tokens, notes: 500 tokens (允许详细的技术笔记)
-    max_tokens_map = {
-        "features": 80,
-        "fixes": 80,
-        "notes": 500,
-        "standards": 80
-    }
-    max_tokens = max_tokens_map.get(group_normalized, 30)
-
     # 验证 content 长度
     # notes 分组添加最小长度验证（1 token）
     min_tokens = 1 if group_normalized == "notes" else None
-    is_valid, error_msg = _validate_content_length(content, max_tokens=max_tokens, min_tokens=min_tokens)
+    is_valid, error_msg = _validate_content_length(content, max_tokens=config.content.max_tokens, min_tokens=min_tokens)
     if not is_valid:
         response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
@@ -442,9 +366,7 @@ def project_add(
         return response.to_json()
 
     # 验证 summary 长度
-    # notes 分组 50 tokens，其他分组 30 tokens
-    desc_max_tokens = 50 if group_normalized == "notes" else 30
-    is_valid, error_msg = _validate_content_length(summary, max_tokens=desc_max_tokens)
+    is_valid, error_msg = _validate_content_length(summary, max_tokens=config.summary.max_tokens)
     if not is_valid:
         response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
