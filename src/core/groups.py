@@ -58,7 +58,7 @@ GROUP_CONFIGS: Dict[str, GroupConfig] = {
         required_fields=["content", "summary", "status", "severity"],
     ),
     "notes": GroupConfig(
-        content=FieldConfig(max_tokens=500),
+        content=FieldConfig(max_tokens=1000),
         summary=FieldConfig(max_tokens=50),
         required_fields=["content", "summary"],
     ),
