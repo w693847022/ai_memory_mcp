@@ -201,3 +201,8 @@ def is_group_with_severity(group_name: str) -> bool:
     """检查组是否支持 severity 字段."""
     config = get_group_config(group_name)
     return config is not None and len(config.severity_values) > 0
+
+
+def all_group_names() -> List[str]:
+    """返回所有组名称列表."""
+    return GroupType.values()

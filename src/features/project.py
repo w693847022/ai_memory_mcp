@@ -15,6 +15,7 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 from core.storage_base import ProjectStorage
+from core.groups import GroupType, all_group_names, is_group_with_status
 from models.item import Item, ItemRelated
 
 # Constants
@@ -321,7 +322,7 @@ class ProjectMemory(ProjectStorage):
             project_data["tag_registry"] = tag_registry
 
         # 保存到对应分组
-        if group == "notes":
+        if group == GroupType.NOTES.value:
             # notes 的 content 存为独立文件，不存入 project.json
             if content and not self._save_note_content(project_id, item_id, content):
                 return {"success": False, "error": "保存笔记内容失败"}
@@ -365,7 +366,7 @@ class ProjectMemory(ProjectStorage):
         for i, item in enumerate(items):
             if item.get("id") == item_id:
                 # 如果是 notes 类型，同时删除 content 文件
-                if group == "notes":
+                if group == GroupType.NOTES.value:
                     content_path = self._get_note_content_path(project_id, item_id)
                     if content_path.exists():
                         try:
@@ -467,7 +468,7 @@ class ProjectMemory(ProjectStorage):
 
         # 更新提供的字段
         if content is not None:
-            if group == "notes":
+            if group == GroupType.NOTES.value:
                 # notes 的 content 存为独立文件
                 if not self._save_note_content(project_id, item_id, content):
                     return {"success": False, "error": "保存笔记内容失败"}
@@ -477,10 +478,10 @@ class ProjectMemory(ProjectStorage):
         if summary is not None:
             item["summary"] = summary
 
-        if status is not None and group in ["features", "fixes"]:
+        if status is not None and is_group_with_status(group):
             item["status"] = status
 
-        if severity is not None and group == "fixes":
+        if severity is not None and group == GroupType.FIXES.value:
             item["severity"] = severity
 
         if related is not None:
@@ -667,7 +668,7 @@ class ProjectMemory(ProjectStorage):
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
         tag_registry = project_data.get("tag_registry", {})
-        groups = ["features", "notes", "fixes", "standards"]
+        groups = all_group_names()
 
         # 构建标签列表
         tags_list = []

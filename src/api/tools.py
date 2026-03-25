@@ -15,6 +15,7 @@ from core.groups import (
     validate_content_length as groups_validate_content_length,
     validate_summary_length,
     get_group_config,
+    is_group_with_status,
 )
 from models.response import ApiResponse
 
@@ -849,7 +850,7 @@ def project_get(
         tag_list = _parse_tags(tags) if tags else []
 
         # 应用过滤条件
-        if group_name in ["features", "fixes"]:
+        if is_group_with_status(group_name):
             if status:
                 filtered_items = [f for f in filtered_items if f.get("status") == status]
             if severity:
