@@ -58,7 +58,7 @@ def test_tag_parsing():
     """测试标签解析."""
     print("测试: 标签解析...")
 
-    from features.tools import _parse_tags
+    from api.tools import _parse_tags
 
     # 测试逗号分隔
     tags = _parse_tags("tag1,tag2,tag3")
