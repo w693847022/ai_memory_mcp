@@ -8,7 +8,7 @@ from typing import Optional
 
 # 从 core 模块导入依赖（支持相对和绝对导入）
 try:
-    from ..core.config import memory, call_stats
+    from .instances import memory, call_stats
     from ..core.utils import track_calls
     from ..core.groups import (
         validate_group_name,
@@ -19,7 +19,7 @@ try:
     )
     from ..models.response import ApiResponse
 except ImportError:
-    from core.config import memory, call_stats
+    from features.instances import memory, call_stats
     from core.utils import track_calls
     from core.groups import (
         validate_group_name,
