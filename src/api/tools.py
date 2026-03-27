@@ -734,13 +734,14 @@ def project_get(
     severity: str = "",
     tags: str = "",
     page: int = 1,
-    size: int = 0
+    size: int = 0,
+    view_mode: str = "summary"
 ) -> str:
     """获取项目信息或查询条目列表/详情.
 
     查询模式:
         1. 整个项目信息 - 不传 group_name
-        2. 分组列表模式 - 传 group_name，不传 item_id (不含 content)
+        2. 分组列表模式 - 传 group_name，不传 item_id (根据 view_mode 决定返回字段)
         3. 条目详情模式 - 传 group_name + item_id (含完整 content)
 
     Args:
@@ -751,18 +752,23 @@ def project_get(
         severity: 严重程度过滤 (可选): 仅对 group_name="fixes" 有效，过滤严重程度 (critical/high/medium/low)
         tags: 标签过滤 (可选): 逗号分隔的标签字符串，OR 逻辑匹配（至少包含一个标签即可），如 "api,enhancement"
         page: 页码 (可选): 从 1 开始，默认为 1
-        size: 每页条数 (可选): 默认为 0 表示返回全部结果，大于 0 时启用分页
+        size: 每页条数 (可选): 根据 view_mode 决定默认值
+        view_mode: 视图模式 (可选): "summary"(精简，默认) 或 "detail"(完整)
+            - summary: 只返回 id, summary, tags，size 默认 20
+            - detail: 返回所有字段（不含 content），size 默认 0（全部）
 
     Returns:
         JSON 格式的项目信息、条目列表或单个条目详情
-        注意: 列表模式不返回 content 字段，需使用 item_id 查询详情获取完整内容
 
     使用示例:
         # 获取整个项目信息
         project_get(project_id="my_project")
 
-        # 查询功能列表
+        # 查询功能列表（精简模式，默认前20条）
         project_get(project_id="my_project", group_name="features")
+
+        # 查询功能列表（完整模式）
+        project_get(project_id="my_project", group_name="features", view_mode="detail")
 
         # 查询功能列表（带状态过滤）
         project_get(project_id="my_project", group_name="features", status="pending")
@@ -785,6 +791,20 @@ def project_get(
         # 查询单个条目详情
         project_get(project_id="my_project", group_name="features", item_id="feat_20260318_001")
     """
+    # 验证 view_mode 参数
+    if view_mode not in ("summary", "detail"):
+        response = ApiResponse(success=False, error=f"无效的 view_mode: {view_mode} (支持: summary/detail)")
+        return response.to_json()
+
+    # 根据 view_mode 设置 size 默认值
+    # 注意：需要将 size 转换为整数进行比较，因为 MCP 工具传入的参数是字符串类型
+    size_int_for_default = int(size) if size not in (None, "", "0") else 0
+    if size_int_for_default == 0:  # 用户未显式指定 size
+        if view_mode == "summary":
+            size = 20  # 精简模式默认返回 20 条
+        else:  # detail
+            size = 0  # 完整模式默认返回全部
+
     result = memory.get_project(project_id)
 
     if not result["success"]:
@@ -890,8 +910,20 @@ def project_get(
                 "has_prev": page_int > 1
             }
 
-        # 列表模式过滤掉 content 字段
-        filtered_items_without_content = [{k: v for k, v in item.items() if k != 'content'} for item in paginated_items]
+        # 列表模式根据 view_mode 决定返回字段
+        if view_mode == "summary":
+            # 精简模式：只返回 id, summary, tags
+            filtered_items_for_response = [
+                {
+                    "id": item.get("id"),
+                    "summary": item.get("summary"),
+                    "tags": item.get("tags", [])
+                }
+                for item in paginated_items
+            ]
+        else:
+            # 完整模式：返回所有字段（除 content）
+            filtered_items_for_response = [{k: v for k, v in item.items() if k != 'content'} for item in paginated_items]
 
         response_data = {
             "project_id": project_id,
@@ -899,7 +931,7 @@ def project_get(
             "group_name": group_name,
             "total": len(items),
             "filtered_total": filtered_total,
-            "items": filtered_items_without_content
+            "items": filtered_items_for_response
         }
 
         # 添加分页元信息（仅在启用分页时）
