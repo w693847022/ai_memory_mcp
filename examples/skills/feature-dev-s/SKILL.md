@@ -49,8 +49,9 @@ argument-hint: <功能描述>
 1. 按照 项目确认.md 执行
 
 2. 建立feature
-    - summary:<用户需求>
+    - summary:<用户需求摘要>
     - content:<用户需求>
+    - 如果用户需求超出content限制则content也记录摘要然后建立note[<feature-id>-初始需求]进行记录
     
 3. 建立note命名[<feature_id>-开发记录]
 
