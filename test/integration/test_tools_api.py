@@ -148,7 +148,7 @@ class ToolsApiTest:
         """测试 project_register 接口."""
         print("测试: project_register...")
 
-        from features.tools import project_register
+        from api.tools import project_register
 
         result = self.call_with_stats(project_register, name="测试项目", path="/tmp/test", summary="测试摘要", tags="api,test")
         resp = self.parse_response(result)
@@ -162,7 +162,7 @@ class ToolsApiTest:
         """测试 project_list 接口."""
         print("测试: project_list...")
 
-        from features.tools import project_list, project_register
+        from api.tools import project_list, project_register
 
         # 注册额外项目
         self.call_with_stats(project_register, name="项目A", path="/tmp/a", tags="a")
@@ -179,7 +179,7 @@ class ToolsApiTest:
         """测试 project_get 接口."""
         print("测试: project_get...")
 
-        from features.tools import project_get, project_add
+        from api.tools import project_get, project_add
 
         # 添加数据
         self.call_with_stats(project_add, self.project_id, group="features", content="功能内容", summary="功能摘要", status="pending", tags="api")
@@ -200,7 +200,7 @@ class ToolsApiTest:
         """测试 project_groups_list 接口."""
         print("测试: project_groups_list...")
 
-        from features.tools import project_groups_list
+        from api.tools import project_groups_list
 
         result = self.call_with_stats(project_groups_list, self.project_id)
         resp = self.parse_response(result)
@@ -213,7 +213,7 @@ class ToolsApiTest:
         """测试 project_add 接口 (features/fixes/notes/standards)."""
         print("测试: project_add...")
 
-        from features.tools import project_add, tag_register
+        from api.tools import project_add, tag_register
 
         # 先注册所有需要的标签
         for tag in ["api", "bug", "idea", "style"]:
@@ -247,7 +247,7 @@ class ToolsApiTest:
         """测试 project_update 接口."""
         print("测试: project_update...")
 
-        from features.tools import project_update
+        from api.tools import project_update
 
         result = self.call_with_stats(project_update, self.project_id, group="features", item_id=self.feature_id, summary="更新后的摘要", status="completed")
         resp = self.parse_response(result)
@@ -259,7 +259,7 @@ class ToolsApiTest:
         """测试 project_delete 接口."""
         print("测试: project_delete...")
 
-        from features.tools import project_delete
+        from api.tools import project_delete
 
         result = self.call_with_stats(project_delete, self.project_id, group="features", item_id=self.feature_id)
         resp = self.parse_response(result)
@@ -272,7 +272,7 @@ class ToolsApiTest:
         """测试 tag_register 接口."""
         print("测试: tag_register...")
 
-        from features.tools import tag_register
+        from api.tools import tag_register
 
         result = self.call_with_stats(tag_register, self.project_id, tag_name="newtag", summary="新标签描述", aliases="nt,new")
         resp = self.parse_response(result)
@@ -284,7 +284,7 @@ class ToolsApiTest:
         """测试 tag_update 接口."""
         print("测试: tag_update...")
 
-        from features.tools import tag_register, tag_update
+        from api.tools import tag_register, tag_update
 
         self.call_with_stats(tag_register, self.project_id, tag_name="updatetag", summary="原始描述")
         result = self.call_with_stats(tag_update, self.project_id, tag_name="updatetag", summary="更新后的描述")
@@ -297,7 +297,7 @@ class ToolsApiTest:
         """测试 tag_delete 接口."""
         print("测试: tag_delete...")
 
-        from features.tools import tag_register, tag_delete
+        from api.tools import tag_register, tag_delete
 
         self.call_with_stats(tag_register, self.project_id, tag_name="deletetag", summary="删除标签")
         result = self.call_with_stats(tag_delete, self.project_id, tag_name="deletetag")
@@ -310,7 +310,7 @@ class ToolsApiTest:
         """测试 tag_merge 接口."""
         print("测试: tag_merge...")
 
-        from features.tools import tag_register, tag_merge
+        from api.tools import tag_register, tag_merge
 
         self.call_with_stats(tag_register, self.project_id, tag_name="oldtag", summary="旧标签")
         result = self.call_with_stats(tag_merge, self.project_id, old_tag="oldtag", new_tag="newtag")
@@ -323,7 +323,7 @@ class ToolsApiTest:
         """测试 project_item_tag_manage 接口."""
         print("测试: project_item_tag_manage...")
 
-        from features.tools import project_item_tag_manage, tag_register, project_add
+        from api.tools import project_item_tag_manage, tag_register, project_add
 
         # 先注册需要的标签
         for tag in ["added", "updated"]:
@@ -356,7 +356,7 @@ class ToolsApiTest:
         """测试 project_tags_info 接口."""
         print("测试: project_tags_info...")
 
-        from features.tools import project_tags_info, tag_register
+        from api.tools import project_tags_info, tag_register
 
         self.call_with_stats(tag_register, self.project_id, tag_name="infotag", summary="信息标签")
 
@@ -374,7 +374,7 @@ class ToolsApiTest:
         """测试 project_rename 接口."""
         print("测试: project_rename...")
 
-        from features.tools import project_rename
+        from api.tools import project_rename
 
         result = self.call_with_stats(project_rename, self.project_id, new_name="新项目名")
         resp = self.parse_response(result)
@@ -386,7 +386,7 @@ class ToolsApiTest:
         """测试 project_stats 接口."""
         print("测试: project_stats...")
 
-        from features.tools import project_stats
+        from api.tools import project_stats
 
         result = self.call_with_stats(project_stats)
         resp = self.parse_response(result)
@@ -398,7 +398,7 @@ class ToolsApiTest:
         """测试 stats_summary 接口."""
         print("测试: stats_summary...")
 
-        from features.tools import stats_summary
+        from api.tools import stats_summary
 
         # 测试无类型（获取所有）
         result = self.call_with_stats(stats_summary)
@@ -416,7 +416,7 @@ class ToolsApiTest:
         """测试 stats_cleanup 接口."""
         print("测试: stats_cleanup...")
 
-        from features.tools import stats_cleanup
+        from api.tools import stats_cleanup
 
         result = self.call_with_stats(stats_cleanup, retention_days=7)
         resp = self.parse_response(result)

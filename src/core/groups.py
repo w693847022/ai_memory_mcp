@@ -212,3 +212,40 @@ def is_group_with_severity(group_name: str) -> bool:
 def all_group_names() -> List[str]:
     """返回所有组名称列表."""
     return GroupType.values()
+
+
+import json
+from typing import Tuple
+
+
+def validate_related(
+    related: Optional[str],
+    group_name: str
+) -> Tuple[bool, str, Optional[Dict[str, List[str]]]]:
+    """解析并验证 related 参数.
+
+    Args:
+        related: JSON 字符串格式的关联数据
+        group_name: 分组名称
+
+    Returns:
+        (是否有效, 错误信息, 解析后的字典)
+    """
+    if not related:
+        return True, "", None
+
+    # 仅 features/fixes 分组支持
+    group_enum = GroupType.from_string(group_name)
+    if not group_enum:
+        return True, "", None  # 无效分组名直接通过
+
+    if group_enum not in (GroupType.FEATURES, GroupType.FIXES):
+        return False, "related 参数仅适用于 features/fixes 分组", None
+
+    # JSON 解析
+    try:
+        related_dict = json.loads(related)
+    except json.JSONDecodeError:
+        return False, "related 参数 JSON 格式无效", None
+
+    return True, "", related_dict

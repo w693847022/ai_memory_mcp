@@ -6,6 +6,8 @@
 import json
 from typing import Optional, Dict, List
 
+from typing import Tuple
+
 # 从 features.instances 导入全局实例
 from features.instances import memory, call_stats
 from core.utils import track_calls
@@ -16,6 +18,7 @@ from core.groups import (
     validate_summary_length,
     get_group_config,
     is_group_with_status,
+    validate_related,
 )
 from models.response import ApiResponse
 
@@ -237,8 +240,7 @@ def project_add(
     summary: str = "",
     status: Optional[str] = None,  # 哨兵值，用于检测是否显式传入
     severity: str = "medium",
-    related_feature: str = "",
-    note_id: str = "",
+    related: str = "",
     tags: str = ""
 ) -> str:
     """添加项目条目（统一接口）.
@@ -254,8 +256,7 @@ def project_add(
         summary: 摘要（所有分组必填，标准摘要描述）
         status: 状态（仅 features/fixes 使用，必填，有效值: pending/in_progress/completed）
         severity: 严重程度（仅 fixes 使用，默认 "medium"）
-        related_feature: 关联功能ID（仅 fixes 使用）
-        note_id: 关联笔记ID（仅 features/fixes 使用）
+        related: 关联条目，JSON格式，如 '{"features": ["feat_001"], "notes": ["note_001"]}'（仅 features/fixes 使用）
         tags: 标签列表，逗号分隔
 
     Returns:
@@ -318,14 +319,11 @@ def project_add(
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 构建 related 字典（从 note_id 和 related_feature 转换，保持向后兼容）
-    related: Dict[str, List[str]] = {}
-    if note_id:
-        related["notes"] = [note_id]
-    if related_feature:
-        if "features" not in related:
-            related["features"] = []
-        related["features"].append(related_feature)
+    # 解析并验证 related 参数（仅 features/fixes 分组有效）
+    is_valid, error_msg, related_dict = validate_related(related, group)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
+        return response.to_json()
 
     # 统一调用 add_item
     result = memory.add_item(
@@ -335,7 +333,7 @@ def project_add(
         summary=summary,
         status=status,
         severity=severity,
-        related=related if related else None,
+        related=related_dict,
         tags=tag_list
     )
 
@@ -356,12 +354,8 @@ def project_add(
             data["item"]["status"] = status
         if severity and severity != "medium":
             data["item"]["severity"] = severity
-        if related:
-            data["item"]["related"] = related
-        if note_id:
-            data["item"]["note_id"] = note_id
-        if related_feature:
-            data["item"]["related_feature"] = related_feature
+        if related_dict:
+            data["item"]["related"] = related_dict
 
         response = ApiResponse(success=True, data=data, message=result['message'])
         return response.to_json()
@@ -377,8 +371,7 @@ def project_update(
     summary: Optional[str] = None,
     status: Optional[str] = None,
     severity: Optional[str] = None,
-    related_feature: Optional[str] = None,
-    note_id: Optional[str] = None,
+    related: Optional[str] = None,
     tags: Optional[str] = None
 ) -> str:
     """更新项目条目（统一接口）.
@@ -391,8 +384,7 @@ def project_update(
         summary: 摘要更新（可选）
         status: 状态更新（可选）
         severity: 严重程度更新（仅 fixes）
-        related_feature: 关联功能更新（仅 fixes） - 已废弃，使用 related
-        note_id: 关联笔记更新（仅 features/fixes） - 已废弃，使用 related
+        related: 关联条目更新,JSON格式,如 '{"features": ["feat_001"]}'（仅 features/fixes）
         tags: 标签更新（可选）
 
     Returns:
@@ -423,16 +415,11 @@ def project_update(
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 构建 related 字典（从 note_id 和 related_feature 转换，保持向后兼容）
-    related: Optional[Dict[str, List[str]]] = None
-    if note_id or related_feature:
-        related = {}
-        if note_id:
-            related["notes"] = [note_id]
-        if related_feature:
-            if "features" not in related:
-                related["features"] = []
-            related["features"].append(related_feature)
+    # 解析并验证 related 参数（仅 features/fixes 分组有效）
+    is_valid, error_msg, related_dict = validate_related(related, group)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
+        return response.to_json()
 
     # 统一调用 update_item
     result = memory.update_item(
@@ -443,7 +430,7 @@ def project_update(
         summary=summary,
         status=status,
         severity=severity,
-        related=related,
+        related=related_dict,
         tags=_parse_tags(tags) if tags else None
     )
 
