@@ -10,6 +10,8 @@ base-directory: ~/.claude/skills
 
 ## ⚠️ 重要指令
 
+**不要并发执行步骤,后面步骤必须要前面步骤完全执行成功**
+
 **DO NOT ENTER PLAN MODE** - 此技能要求直接执行，不进入计划模式。
 
 此技能定义了完整的 Bug 修复流程，包括问题分析、根因定位、代码修复和验证。按照以下阶段直接执行即可，无需使用 EnterPlanMode。
