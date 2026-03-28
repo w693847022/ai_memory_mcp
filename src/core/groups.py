@@ -235,6 +235,10 @@ def validate_related(
     if related is None:
         return True, "", None  # 不更新
 
+    # 空字符串视为不设置关联
+    if related == "":
+        return True, "", None
+
     # 仅 features/fixes 分组支持
     group_enum = GroupType.from_string(group_name)
     if not group_enum:

@@ -11,9 +11,9 @@ argument-hint: <功能描述>
 
 **不要并发执行步骤,后面步骤必须要前面步骤完全执行成功**
 
-**DO NOT ENTER PLAN MODE** - 此技能要求直接执行，不进入计划模式。
+**DO NOT ENTER PLAN MODE** - 此技能要求直接执行，不进入计划模式,如果在计划模式则需要推出计划模式。
 
-**记忆查询**: 在需要回忆过往记录时（如查找相似功能、历史修复、相关笔记），可使用 `memory-query` 技能进行查询减少上下文。
+**所有memory_mcp的操作使用子代理来处理，减少主窗口上下文**
 
 **开发记录**: 阶段1后的每一步的关键结果记录到阶段1创建的[<feature_id>-开发记录]note中
     - 如果记录时因为入参不规范导致失败,需要重试
@@ -55,6 +55,7 @@ argument-hint: <功能描述>
     - 如果用户需求超出content限制则content也记录摘要然后建立note[<feature-id>-初始需求]进行记录
     
 3. 建立note命名[<feature_id>-开发记录]
+    - 在feature条目中增加这个note的关联 
 
 ---
 
@@ -119,6 +120,7 @@ argument-hint: <功能描述>
     - content：为确认的需求摘要
     
 3. 建立note[<feature_id>-需求确认] 记录完整需求
+    - 在feature条目中增加这个note的关联 
 
 ---
 
@@ -140,6 +142,7 @@ argument-hint: <功能描述>
 1. 按照 ./方案规划.md 执行
 
 2. 建立note[<feature_id>-实现方案] 记录完整方案内容
+    - 在feature条目中增加这个note的关联 
 
 ---
 
