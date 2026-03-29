@@ -8,19 +8,19 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
-# 复制依赖文件
-COPY requirements.txt .
+# 复制 FastAPI 依赖文件
+COPY requirements-fastapi.txt .
 
 # 安装 Python 依赖 - 使用清华镜像源加速
 RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 && \
-    pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 -r requirements.txt
+    pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 -r requirements-fastapi.txt
 
-# 复制项目文件
-COPY src/ ./src/
-COPY run.py .
+# 复制项目文件（FastAPI 只需要 rest_api 模块）
+COPY src/rest_api/ ./src/rest_api/
 
-# 创建数据目录
-RUN mkdir -p /app/.project_memory_ai
+# 创建必要目录并设置权限
+RUN mkdir -p /app/.project_memory_ai /app/logs && \
+    chmod 777 /app/logs || true
 
 # 暴露端口
 EXPOSE 8001
