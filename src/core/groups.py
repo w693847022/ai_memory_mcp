@@ -161,7 +161,10 @@ def validate_content_length(content: str, group_name: str, min_tokens: Optional[
         return False, f"内容过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）", int(estimated_tokens)
 
     if estimated_tokens > max_tokens:
-        return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens", int(estimated_tokens)
+        msg = f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens"
+        if group_name in ("features", "fixes"):
+            msg += "。如果无法简化，建议建立 note 与之关联"
+        return False, msg, int(estimated_tokens)
     return True, None, int(estimated_tokens)
 
 
@@ -187,7 +190,10 @@ def validate_summary_length(summary: str, group_name: str, min_tokens: Optional[
         return False, f"摘要过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）", int(estimated_tokens)
 
     if estimated_tokens > max_tokens:
-        return False, f"摘要过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens", int(estimated_tokens)
+        msg = f"摘要过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens"
+        if group_name in ("features", "fixes"):
+            msg += "。如果无法简化，建议建立 note 与之关联"
+        return False, msg, int(estimated_tokens)
     return True, None, int(estimated_tokens)
 
 
@@ -206,3 +212,56 @@ def is_group_with_severity(group_name: str) -> bool:
 def all_group_names() -> List[str]:
     """返回所有组名称列表."""
     return GroupType.values()
+
+
+# 默认标签列表
+DEFAULT_TAGS = [
+    "implementation", "enhancement", "bug", "docs",
+    "refactor", "test", "ops", "security"
+]
+
+
+import json
+from typing import Tuple
+
+
+def validate_related(
+    related: Optional[str] | Optional[Dict[str, List[str]]],
+    group_name: str
+) -> Tuple[bool, str, Optional[Dict[str, List[str]]]]:
+    """解析并验证 related 参数.
+
+    Args:
+        related: JSON 字符串格式或字典格式的关联数据
+        group_name: 分组名称
+
+    Returns:
+        (是否有效, 错误信息, 解析后的字典)
+        None 表示不更新，{} 表示删除关联，非空字典表示设置关联
+    """
+    if related is None:
+        return True, "", None  # 不更新
+
+    # 空字符串视为不设置关联
+    if related == "":
+        return True, "", None
+
+    # 仅 features/fixes 分组支持
+    group_enum = GroupType.from_string(group_name)
+    if not group_enum:
+        return True, "", None  # 无效分组名直接通过
+
+    if group_enum not in (GroupType.FEATURES, GroupType.FIXES):
+        return False, "related 参数仅适用于 features/fixes 分组", None
+
+    # 处理字典类型（MCP 协议自动解析 JSON 时）
+    if isinstance(related, dict):
+        related_dict = related
+    else:
+        # JSON 字符串解析
+        try:
+            related_dict = json.loads(related)
+        except json.JSONDecodeError:
+            return False, "related 参数 JSON 格式无效", None
+
+    return True, "", related_dict

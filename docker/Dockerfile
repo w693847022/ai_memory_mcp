@@ -11,11 +11,12 @@ ENV PYTHONUNBUFFERED=1 \
     MCP_HOST=0.0.0.0 \
     MCP_PORT=8000
 
-# 复制依赖文件
-COPY requirements.txt .
+# 复制 MCP Server 依赖文件
+COPY requirements-mcp.txt .
 
-# 安装 Python 依赖
-RUN pip install --no-cache-dir -r requirements.txt
+# 安装 Python 依赖 - 使用清华镜像源加速
+RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 && \
+    pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 -r requirements-mcp.txt
 
 # 复制项目文件
 COPY src/ ./src/

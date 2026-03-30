@@ -23,7 +23,14 @@ class ApiResponse:
             response["message"] = self.message
         return response
 
-    def to_json(self) -> str:
+    def to_json(self, compact: bool = True) -> str:
+        """转换为 JSON 字符串.
+
+        Args:
+            compact: 是否使用紧凑格式（无缩进），默认 True
+        """
+        if compact:
+            return json.dumps(self.to_dict(), ensure_ascii=False, separators=(",", ":"))
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
     @classmethod

@@ -1,13 +1,10 @@
 """Project Module - 项目管理模块."""
 
 import json
-import time
-import re
-import shutil
 import sys
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Union
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Import ProjectStorage from core (avoid circular import by using sys.path)
 src_dir = Path(__file__).parent.parent
@@ -15,14 +12,13 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 from core.storage_base import ProjectStorage
-from core.groups import GroupType, all_group_names, is_group_with_status
+from core.groups import (
+    GroupType, all_group_names, is_group_with_status, DEFAULT_TAGS,
+    validate_group_name, validate_status,
+    validate_content_length, validate_summary_length,
+    get_group_config, validate_related,
+)
 from models.item import Item, ItemRelated
-
-# Constants
-DEFAULT_TAGS = [
-    "implementation", "enhancement", "bug", "docs",
-    "refactor", "test", "ops", "security"
-]
 
 # ==================== ProjectMemory ====================
 
@@ -54,14 +50,145 @@ class ProjectMemory(ProjectStorage):
         """
         return 3 <= len(description) <= 200
 
-    def _generate_timestamps(self) -> Dict[str, str]:
-        """生成创建和更新时间戳字典."""
-        now = datetime.now().isoformat()
-        return {"created_at": now, "updated_at": now}
+    # ==================== 统一验证方法 ====================
 
-    def _update_timestamp(self, item: Dict[str, Any]) -> None:
-        """更新条目的 updated_at 字段."""
-        item["updated_at"] = datetime.now().isoformat()
+    def _validate_tag_length(self, tag: str, max_tokens: int = 10) -> tuple[bool, str]:
+        """验证单个标签长度（基于 token 估算）.
+
+        Args:
+            tag: 要验证的标签
+            max_tokens: 最大 token 数
+
+        Returns:
+            (是否有效, 错误信息)
+        """
+        if not tag:
+            return False, "标签不能为空"
+        estimated_tokens = len(tag) / 3
+        if estimated_tokens > max_tokens:
+            return False, f"标签 '{tag}' 过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
+        return True, ""
+
+    def validate_add_item(
+        self,
+        group: str,
+        content: str,
+        summary: str,
+        status: Optional[str],
+        related: Optional[Union[str, Dict[str, List[str]]]],
+        tag_list: List[str],
+    ) -> Dict[str, Any]:
+        """统一验证添加条目的所有参数.
+
+        Args:
+            group: 分组类型
+            content: 条目内容
+            summary: 条目摘要
+            status: 状态（可选）
+            related: 关联数据
+            tag_list: 标签列表
+
+        Returns:
+            验证结果，成功包含 related_dict，失败包含 error
+        """
+        # 验证 group 有效性
+        is_valid, error_msg = validate_group_name(group)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        # status 参数验证（仅 features/fixes 分组必填）
+        config = get_group_config(group)
+        if config and config.status_values:
+            if status is None:
+                return {"success": False, "error": "features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)"}
+            is_valid, error_msg = validate_status(status, group)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+        else:
+            status = None
+
+        # 验证必需参数
+        if not content:
+            return {"success": False, "error": "content 参数不能为空"}
+
+        # 验证 content 长度
+        is_valid, error_msg, _ = validate_content_length(content, group)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        # 验证 summary 必填（所有分组）
+        if not summary or not summary.strip():
+            return {"success": False, "error": "summary 参数不能为空，请提供标准摘要描述"}
+
+        # 验证 summary 长度
+        is_valid, error_msg, _ = validate_summary_length(summary, group)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        # 验证 tags 不能为空
+        if not tag_list:
+            return {"success": False, "error": "tags 参数不能为空，请至少提供一个标签"}
+
+        # 验证每个 tag 长度 (1-10 tokens)
+        for tag in tag_list:
+            is_valid, error_msg = self._validate_tag_length(tag, max_tokens=10)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
+        # 解析并验证 related 参数（仅 features/fixes 分组有效）
+        is_valid, error_msg, related_dict = validate_related(related, group)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        return {"success": True, "related_dict": related_dict}
+
+    def validate_update_item(
+        self,
+        group: str,
+        item_id: str,
+        content: Optional[str] = None,
+        summary: Optional[str] = None,
+        related: Optional[Union[str, Dict[str, List[str]], None]] = None,
+    ) -> Dict[str, Any]:
+        """统一验证更新条目参数.
+
+        Args:
+            group: 分组类型
+            item_id: 条目ID
+            content: 新内容（可选）
+            summary: 新摘要（可选）
+            related: 关联数据（可选）
+
+        Returns:
+            验证结果，成功包含 related_dict，失败包含 error
+        """
+        # 验证 group 有效性
+        is_valid, error_msg = validate_group_name(group)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        # 验证必需参数
+        if not item_id:
+            return {"success": False, "error": "item_id 参数不能为空"}
+
+        # 验证 content 长度
+        if content is not None:
+            is_valid, error_msg, _ = validate_content_length(content, group)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
+        # 验证 summary 长度
+        if summary is not None:
+            is_valid, error_msg, _ = validate_summary_length(summary, group)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
+        # 解析并验证 related 参数（仅 features/fixes 分组有效）
+        is_valid, error_msg, related_dict = validate_related(related, group)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        return {"success": True, "related_dict": related_dict}
 
     # ==================== 项目注册 ====================
 
@@ -261,6 +388,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果，包含 item_id
         """
+        # 检查项目是否已归档（在 _load_project 之前检查，因为归档后目录已删除）
+        not_archived, archive_err = self.check_project_not_archived(project_id)
+        if not not_archived:
+            return {"success": False, "error": archive_err}
+
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
@@ -353,6 +485,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
+        # 检查项目是否已归档（在 _load_project 之前检查）
+        not_archived, archive_err = self.check_project_not_archived(project_id)
+        if not not_archived:
+            return {"success": False, "error": archive_err}
+
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
@@ -415,6 +552,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
+        # 检查项目是否已归档（在 _load_project 之前检查）
+        not_archived, archive_err = self.check_project_not_archived(project_id)
+        if not not_archived:
+            return {"success": False, "error": archive_err}
+
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
@@ -485,7 +627,10 @@ class ProjectMemory(ProjectStorage):
             item["severity"] = severity
 
         if related is not None:
-            item["related"] = related
+            if related:  # 非空字典，设置关联
+                item["related"] = related
+            else:  # 空字典，删除关联
+                item.pop("related", None)
 
         project_data[group][item_index] = item
         project_data["info"]["updated_at"] = datetime.now().isoformat()
@@ -519,8 +664,11 @@ class ProjectMemory(ProjectStorage):
             "data": project_data
         }
 
-    def list_projects(self) -> Dict[str, Any]:
+    def list_projects(self, include_archived: bool = False) -> Dict[str, Any]:
         """列出所有项目.
+
+        Args:
+            include_archived: 是否包含归档项目
 
         Returns:
             项目列表
@@ -536,7 +684,21 @@ class ProjectMemory(ProjectStorage):
                     "name": project_data["info"]["name"],
                     "summary": project_data["info"].get("summary", ""),
                     "tags": project_data["info"]["tags"],
-                    "created_at": project_data["info"]["created_at"]
+                    "created_at": project_data["info"]["created_at"],
+                    "status": "active"
+                })
+
+        # 如果需要包含归档项目
+        if include_archived:
+            archived_projects = self._get_archived_projects()
+            for meta in archived_projects:
+                projects.append({
+                    "id": meta["id"],
+                    "name": meta["name"],
+                    "summary": meta.get("summary", ""),
+                    "tags": meta.get("tags", []),
+                    "status": "archived",
+                    "archived_at": meta.get("archived_at", "")
                 })
 
         return {
@@ -717,7 +879,7 @@ class ProjectMemory(ProjectStorage):
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in ["features", "notes", "fixes", "standards"]:
+        if group_name not in all_group_names():
             return {"success": False, "error": f"分组 '{group_name}' 不存在"}
 
         # 从 tag_registry 获取所有注册标签
@@ -768,7 +930,7 @@ class ProjectMemory(ProjectStorage):
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in ["features", "notes", "fixes", "standards"]:
+        if group_name not in all_group_names():
             return {"success": False, "error": f"分组 '{group_name}' 不存在"}
 
         # 获取所有使用的标签
@@ -825,7 +987,7 @@ class ProjectMemory(ProjectStorage):
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in ["features", "notes", "fixes", "standards"]:
+        if group_name not in all_group_names():
             return {"success": False, "error": f"分组 '{group_name}' 不存在"}
 
         items = project_data.get(group_name, [])
@@ -1323,8 +1485,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
+        # 支持新格式（目录）和旧格式（单文件）
+        project_dir = self._get_project_dir(project_id)
         project_path = self._get_project_path(project_id)
-        if not project_path.exists():
+
+        if not project_dir.exists() and not project_path.exists():
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
         # 获取项目名称用于返回消息
@@ -1332,10 +1497,16 @@ class ProjectMemory(ProjectStorage):
         project_name = project_data["info"]["name"] if project_data else project_id
 
         try:
-            project_path.unlink()
+            import shutil
+            if project_dir.exists():
+                shutil.rmtree(project_dir)
+            else:
+                project_path.unlink()
             # 清理缓存
             if project_id in self._projects_cache:
                 del self._projects_cache[project_id]
+            if project_id in self._uuid_to_name_cache:
+                del self._uuid_to_name_cache[project_id]
             # 清理 TTL 缓存
             self._project_data_cache.pop(project_id, None)
             self._save_metadata()
@@ -1345,6 +1516,60 @@ class ProjectMemory(ProjectStorage):
             }
         except IOError:
             return {"success": False, "error": "删除文件失败"}
+
+    def check_project_not_archived(self, project_id: str) -> tuple[bool, Optional[str]]:
+        """检查项目是否未归档.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            (是否未归档, 错误信息)
+        """
+        if self._is_project_archived(project_id):
+            return False, f"项目 '{project_id}' 已归档，无法执行操作"
+        return True, None
+
+    def remove_project(self, project_id: str, mode: str = "archive") -> Dict[str, Any]:
+        """归档或永久删除项目.
+
+        Args:
+            project_id: 项目ID
+            mode: 操作模式 - "archive"(归档，默认) 或 "delete"(永久删除)
+
+        Returns:
+            操作结果
+        """
+        if mode not in ("archive", "delete"):
+            return {"success": False, "error": f"无效的 mode: {mode} (支持: archive/delete)"}
+
+        # 检查项目是否已归档
+        if self._is_project_archived(project_id):
+            return {"success": False, "error": f"项目 '{project_id}' 已归档，无法再次操作"}
+
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        project_name = project_data["info"].get("name", project_id)
+
+        if mode == "archive":
+            result = self._compress_and_archive_project(project_id)
+            if result["success"]:
+                # 清理缓存
+                if project_id in self._projects_cache:
+                    del self._projects_cache[project_id]
+                if project_id in self._uuid_to_name_cache:
+                    del self._uuid_to_name_cache[project_id]
+                self._project_data_cache.pop(project_id, None)
+                self._save_metadata()
+                result["message"] = f"项目 '{project_name}' (ID: {project_id}) 已归档"
+            return result
+        else:
+            # 永久删除
+            result = self.delete_project(project_id)
+            return result
 
     # ==================== 导入导出 ====================
 

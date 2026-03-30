@@ -1,0 +1,33 @@
+FROM python:3.12-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+# 复制 FastAPI 依赖文件
+COPY requirements-fastapi.txt .
+
+# 安装 Python 依赖 - 使用清华镜像源加速
+RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 && \
+    pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 -r requirements-fastapi.txt
+
+# 复制项目文件（FastAPI 只需要 rest_api 模块）
+COPY src/rest_api/ ./src/rest_api/
+
+# 创建必要目录并设置权限
+RUN mkdir -p /app/.project_memory_ai /app/logs && \
+    chmod 777 /app/logs || true
+
+# 暴露端口
+EXPOSE 8001
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8001/health', timeout=5)"
+
+# 启动命令 - 需要将 src 目录添加到 Python 路径
+CMD ["sh", "-c", "PYTHONPATH=/app/src uvicorn rest_api.main:app --host 0.0.0.0 --port 8001"]
