@@ -343,9 +343,9 @@ class ProjectStorage:
             project_id: 项目ID
 
         Returns:
-            组配置字典，custom_groups 值为 CustomGroupConfig 数据类对象
+            组配置字典，groups 值为 UnifiedGroupConfig 数据类对象
         """
-        from core.groups import CustomGroupConfig
+        from core.groups import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS, DEFAULT_RELATED_RULES
 
         config_path = self._get_group_config_path(project_id)
         if config_path.exists():
@@ -353,29 +353,25 @@ class ProjectStorage:
                 with open(config_path, "r", encoding="utf-8") as f:
                     raw_configs = json.load(f)
 
-                # 将 custom_groups 转换为 CustomGroupConfig 数据类
-                if "custom_groups" in raw_configs:
-                    custom_groups = {}
-                    for group_name, group_config in raw_configs["custom_groups"].items():
+                # 转换为 UnifiedGroupConfig 数据类
+                if "groups" in raw_configs:
+                    groups = {}
+                    for group_name, group_config in raw_configs["groups"].items():
                         if isinstance(group_config, dict):
-                            custom_groups[group_name] = CustomGroupConfig.from_dict(group_config)
+                            groups[group_name] = UnifiedGroupConfig.from_dict(group_config)
                         else:
-                            custom_groups[group_name] = group_config
-                    raw_configs["custom_groups"] = custom_groups
+                            groups[group_name] = group_config
+                    raw_configs["groups"] = groups
 
                 return raw_configs
             except (json.JSONDecodeError, IOError):
                 pass
 
+        # 初始化默认配置（包含内置组）
         return {
-            "custom_groups": {},
+            "groups": {name: UnifiedGroupConfig.from_dict(cfg) for name, cfg in DEFAULT_GROUP_CONFIGS.items()},
             "group_settings": {
-                "default_related_rules": {
-                    "features": ["notes"],
-                    "fixes": ["features", "notes"],
-                    "standards": ["notes"],
-                    "notes": []
-                }
+                "default_related_rules": DEFAULT_RELATED_RULES
             }
         }
 
@@ -412,15 +408,15 @@ class ProjectStorage:
         Returns:
             可序列化的配置字典
         """
-        from core.groups import CustomGroupConfig
+        from core.groups import UnifiedGroupConfig
 
         result = {}
         for key, value in configs.items():
-            if key == "custom_groups" and isinstance(value, dict):
-                # 转换自定义组配置
+            if key == "groups" and isinstance(value, dict):
+                # 转换所有组配置（内置+自定义）
                 result[key] = {}
                 for group_name, group_config in value.items():
-                    if isinstance(group_config, CustomGroupConfig):
+                    if isinstance(group_config, UnifiedGroupConfig):
                         result[key][group_name] = group_config.to_dict()
                     elif isinstance(group_config, dict):
                         result[key][group_name] = group_config

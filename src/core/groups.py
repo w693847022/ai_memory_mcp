@@ -1,7 +1,7 @@
 """组配置和检测函数模块."""
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Any
 import json
 
 
@@ -40,25 +40,56 @@ class FieldConfig:
 
 @dataclass
 class GroupConfig:
-    """组配置."""
+    """组配置（内部使用，兼容旧代码）."""
     content: FieldConfig
     summary: FieldConfig
     status_values: List[str] = field(default_factory=list)
     severity_values: List[str] = field(default_factory=list)
     required_fields: List[str] = field(default_factory=list)
 
+    def to_unified_dict(self) -> Dict[str, Any]:
+        """转换为统一配置字典（用于 JSON 存储）."""
+        return {
+            "content_max_bytes": self.content.max_tokens * 3,
+            "summary_max_bytes": self.summary.max_tokens * 3,
+            "allow_related": bool(self.status_values),
+            "allowed_related_to": [],
+            "enable_status": bool(self.status_values),
+            "enable_severity": bool(self.severity_values),
+            "status_values": self.status_values,
+            "severity_values": self.severity_values,
+            "required_fields": self.required_fields,
+        }
+
+    @classmethod
+    def from_unified_dict(cls, data: Dict[str, Any]) -> "GroupConfig":
+        """从统一配置字典创建 GroupConfig."""
+        content_max = data.get("content_max_bytes", 240) // 3
+        summary_max = data.get("summary_max_bytes", 90) // 3
+        return cls(
+            content=FieldConfig(max_tokens=content_max),
+            summary=FieldConfig(max_tokens=summary_max),
+            status_values=data.get("status_values", []),
+            severity_values=data.get("severity_values", []),
+            required_fields=data.get("required_fields", ["content", "summary"]),
+        )
+
 
 @dataclass
-class CustomGroupConfig:
-    """自定义组配置（继承默认配置的部分设置）."""
-    content_max_bytes: int = 240  # 默认约 80 tokens * 3 字节
-    summary_max_bytes: int = 90   # 默认约 30 tokens * 3 字节
+class UnifiedGroupConfig:
+    """统一组配置（内置组和自定义组通用）."""
+    content_max_bytes: int = 240
+    summary_max_bytes: int = 90
     allow_related: bool = False
     allowed_related_to: List[str] = field(default_factory=list)
-    enable_status: bool = True    # 默认开启
-    enable_severity: bool = False # 默认关闭
+    enable_status: bool = True
+    enable_severity: bool = False
+    status_values: List[str] = field(default_factory=list)
+    severity_values: List[str] = field(default_factory=list)
+    required_fields: List[str] = field(default_factory=list)
+    is_builtin: bool = False
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """转换为字典以便 JSON 序列化."""
         return {
             "content_max_bytes": self.content_max_bytes,
@@ -67,11 +98,17 @@ class CustomGroupConfig:
             "allowed_related_to": self.allowed_related_to,
             "enable_status": self.enable_status,
             "enable_severity": self.enable_severity,
+            "status_values": self.status_values,
+            "severity_values": self.severity_values,
+            "required_fields": self.required_fields,
+            "is_builtin": self.is_builtin,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "CustomGroupConfig":
+    def from_dict(cls, data: Dict[str, Any]) -> "UnifiedGroupConfig":
         """从字典创建数据类."""
+        if isinstance(data, cls):
+            return data
         return cls(
             content_max_bytes=data.get("content_max_bytes", 240),
             summary_max_bytes=data.get("summary_max_bytes", 90),
@@ -79,7 +116,15 @@ class CustomGroupConfig:
             allowed_related_to=data.get("allowed_related_to", []),
             enable_status=data.get("enable_status", True),
             enable_severity=data.get("enable_severity", False),
+            status_values=data.get("status_values", []),
+            severity_values=data.get("severity_values", []),
+            required_fields=data.get("required_fields", ["content", "summary"]),
+            is_builtin=data.get("is_builtin", False),
         )
+
+
+# 保留 CustomGroupConfig 作为 UnifiedGroupConfig 的别名，兼容旧代码
+CustomGroupConfig = UnifiedGroupConfig
 
 
 @dataclass
@@ -99,32 +144,56 @@ class GroupSettings:
         )
 
 
-# 分组配置表（内置组，向后兼容）
-# 注意：content/summary 的 max_tokens 是 token 数量，验证时会转换为字节（约 * 3）
-GROUP_CONFIGS: Dict[str, GroupConfig] = {
-    "features": GroupConfig(
-        content=FieldConfig(max_tokens=80),  # ~240 字节
-        summary=FieldConfig(max_tokens=30),   # ~90 字节
-        status_values=["pending", "in_progress", "completed"],
-        required_fields=["content", "summary", "status"],
-    ),
-    "fixes": GroupConfig(
-        content=FieldConfig(max_tokens=80),   # ~240 字节
-        summary=FieldConfig(max_tokens=30),   # ~90 字节
-        status_values=["pending", "in_progress", "completed"],
-        severity_values=["critical", "high", "medium", "low"],
-        required_fields=["content", "summary", "status", "severity"],
-    ),
-    "notes": GroupConfig(
-        content=FieldConfig(max_tokens=1000), # ~3000 字节
-        summary=FieldConfig(max_tokens=50),   # ~150 字节
-        required_fields=["content", "summary"],
-    ),
-    "standards": GroupConfig(
-        content=FieldConfig(max_tokens=80),   # ~240 字节
-        summary=FieldConfig(max_tokens=30),  # ~90 字节
-        required_fields=["content", "summary"],
-    ),
+# 默认内置组配置（用于初始化 JSON 存储）
+DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "features": {
+        "content_max_bytes": 240,
+        "summary_max_bytes": 90,
+        "allow_related": True,
+        "allowed_related_to": ["notes"],
+        "enable_status": True,
+        "enable_severity": False,
+        "status_values": ["pending", "in_progress", "completed"],
+        "severity_values": [],
+        "required_fields": ["content", "summary", "status"],
+        "is_builtin": True,
+    },
+    "fixes": {
+        "content_max_bytes": 240,
+        "summary_max_bytes": 90,
+        "allow_related": True,
+        "allowed_related_to": ["features", "notes"],
+        "enable_status": True,
+        "enable_severity": True,
+        "status_values": ["pending", "in_progress", "completed"],
+        "severity_values": ["critical", "high", "medium", "low"],
+        "required_fields": ["content", "summary", "status", "severity"],
+        "is_builtin": True,
+    },
+    "notes": {
+        "content_max_bytes": 3000,
+        "summary_max_bytes": 150,
+        "allow_related": False,
+        "allowed_related_to": [],
+        "enable_status": False,
+        "enable_severity": False,
+        "status_values": [],
+        "severity_values": [],
+        "required_fields": ["content", "summary"],
+        "is_builtin": True,
+    },
+    "standards": {
+        "content_max_bytes": 240,
+        "summary_max_bytes": 90,
+        "allow_related": True,
+        "allowed_related_to": ["notes"],
+        "enable_status": False,
+        "enable_severity": False,
+        "status_values": [],
+        "severity_values": [],
+        "required_fields": ["content", "summary"],
+        "is_builtin": True,
+    },
 }
 
 # 默认关联规则
@@ -139,138 +208,132 @@ DEFAULT_RELATED_RULES: Dict[str, List[str]] = {
 # ==================== 公共检测函数 ====================
 
 def is_reserved_field(field_name: str) -> bool:
-    """检测字段名是否为系统保留字段.
-
-    Args:
-        field_name: 字段名称
-
-    Returns:
-        是否为保留字段
-    """
+    """检测字段名是否为系统保留字段."""
     return field_name in RESERVED_FIELDS
 
 
-def validate_group_name(group_name: str, custom_groups: Optional[Dict[str, CustomGroupConfig]] = None) -> tuple[bool, Optional[str]]:
+def validate_group_name(group_name: str, all_groups: Optional[Dict[str, UnifiedGroupConfig]] = None) -> tuple[bool, Optional[str]]:
     """验证组名是否合法.
 
     Args:
         group_name: 组名称
-        custom_groups: 自定义组配置字典（可选）
+        all_groups: 所有组配置字典（内置+自定义，可选）
 
     Returns:
         (是否有效, 错误信息)
     """
-    # 检查是否与保留字段冲突
     if is_reserved_field(group_name):
         return False, f"组名 '{group_name}' 与系统配置字段冲突"
 
     # 检查是否是内置组
-    if group_name in GROUP_CONFIGS:
+    if group_name in DEFAULT_GROUP_CONFIGS:
         return True, None
 
     # 检查是否是自定义组
-    if custom_groups and group_name in custom_groups:
+    if all_groups and group_name in all_groups:
         return True, None
 
     valid_groups = ", ".join(GroupType.values())
-    if custom_groups:
-        valid_groups += ", " + ", ".join(custom_groups.keys())
+    if all_groups:
+        valid_groups += ", " + ", ".join(all_groups.keys())
     return False, f"无效的分组类型: {group_name} (支持: {valid_groups})"
 
 
-def get_group_config(group_name: str) -> Optional[GroupConfig]:
+def get_group_config(group_name: str, all_groups: Optional[Dict[str, UnifiedGroupConfig]] = None) -> Optional[UnifiedGroupConfig]:
     """获取组配置.
 
     Args:
         group_name: 组名称
+        all_groups: 所有组配置字典（内置+自定义，可选）
 
     Returns:
         组配置对象，不存在返回 None
     """
-    return GROUP_CONFIGS.get(group_name)
+    # 先从 all_groups 查找（可能包含覆盖的内置组配置）
+    if all_groups and group_name in all_groups:
+        return all_groups[group_name]
+    # 再从默认内置组配置查找
+    if group_name in DEFAULT_GROUP_CONFIGS:
+        return UnifiedGroupConfig.from_dict(DEFAULT_GROUP_CONFIGS[group_name])
+    return None
 
 
-def get_all_groups(custom_groups: Optional[Dict[str, CustomGroupConfig]] = None) -> List[str]:
+def get_all_groups(all_groups: Optional[Dict[str, UnifiedGroupConfig]] = None) -> List[str]:
     """获取所有可用组名称（内置 + 自定义）.
 
     Args:
-        custom_groups: 自定义组配置字典（可选）
+        all_groups: 所有组配置字典（可选）
 
     Returns:
         所有组名称列表
     """
     groups = GroupType.values()
-    if custom_groups:
-        groups = groups + list(custom_groups.keys())
+    if all_groups:
+        groups = groups + list(all_groups.keys())
     return groups
 
 
-def validate_status(status: str, group_name: str, custom_config: Optional[CustomGroupConfig] = None) -> tuple[bool, Optional[str]]:
+def validate_status(status: str, group_name: str, config: Optional[UnifiedGroupConfig] = None) -> tuple[bool, Optional[str]]:
     """验证状态值是否合法.
 
     Args:
         status: 状态值
         group_name: 组名称
-        custom_config: 自定义组配置（可选）
+        config: 组配置（可选）
 
     Returns:
         (是否有效, 错误信息)
     """
-    # 内置组
-    config = get_group_config(group_name)
+    if config is None:
+        config = get_group_config(group_name)
+
     if config is not None:
-        if not config.status_values:
-            return True, None  # 该组不支持 status
-        if status in config.status_values:
+        if not config.enable_status:
             return True, None
-        valid_values = ", ".join(config.status_values)
+        # 如果没有定义 status_values，使用默认值
+        status_values = config.status_values if config.status_values else ["pending", "in_progress", "completed"]
+        if status in status_values:
+            return True, None
+        valid_values = ", ".join(status_values)
         return False, f"无效的 status 值: {status} (有效值: {valid_values})"
 
-    # 自定义组
-    if custom_config is not None:
-        if not custom_config.enable_status:
-            return True, None  # 自定义组未开启 status
-        if status in ["pending", "in_progress", "completed"]:
-            return True, None
-        return False, f"无效的 status 值: {status} (有效值: pending/in_progress/completed)"
-
-    return True, None  # 组名无效会在其他函数中检测
+    return True, None
 
 
-def validate_severity(severity: str, custom_config: Optional[CustomGroupConfig] = None) -> tuple[bool, Optional[str]]:
+def validate_severity(severity: str, config: Optional[UnifiedGroupConfig] = None) -> tuple[bool, Optional[str]]:
     """验证严重程度值是否合法.
 
     Args:
         severity: 严重程度值
-        custom_config: 自定义组配置（可选）
+        config: 组配置（可选）
 
     Returns:
         (是否有效, 错误信息)
     """
-    # 自定义组检查
-    if custom_config is not None:
-        if not custom_config.enable_severity:
-            return True, None  # 自定义组未开启 severity
-        if severity in ["critical", "high", "medium", "low"]:
-            return True, None
-        return False, f"无效的 severity 值: {severity} (有效值: critical/high/medium/low)"
+    if config is None:
+        config = get_group_config("fixes")
 
-    # 内置组（fixes）
-    fixes_config = get_group_config("fixes")
-    if fixes_config and severity in fixes_config.severity_values:
-        return True, None
+    if config is not None:
+        if not config.enable_severity:
+            return True, None
+        # 如果没有定义 severity_values，使用默认值
+        severity_values = config.severity_values if config.severity_values else ["critical", "high", "medium", "low"]
+        if severity in severity_values:
+            return True, None
+        return False, f"无效的 severity 值: {severity} (有效值: {', '.join(severity_values)})"
+
     if severity in ["critical", "high", "medium", "low"]:
         return True, None
     return False, f"无效的 severity 值: {severity} (有效值: critical/high/medium/low)"
 
 
-def validate_content_length(content: str, group_name: str, custom_config: Optional[CustomGroupConfig] = None, min_tokens: Optional[int] = None, min_bytes: Optional[int] = None) -> tuple[bool, Optional[str], Optional[int]]:
+def validate_content_length(content: str, group_name: str, config: Optional[UnifiedGroupConfig] = None, min_tokens: Optional[int] = None, min_bytes: Optional[int] = None) -> tuple[bool, Optional[str], Optional[int]]:
     """验证内容长度（字节验证）.
 
     Args:
         content: 内容
         group_name: 组名称
-        custom_config: 自定义组配置（可选）
+        config: 组配置（可选）
         min_tokens: 最小 token 数（可选，仅用于兼容旧接口，会转换为字节）
         min_bytes: 最小字节数（可选，默认1字节）
 
@@ -279,17 +342,17 @@ def validate_content_length(content: str, group_name: str, custom_config: Option
     """
     content_bytes = len(content.encode('utf-8'))
 
-    # 计算最小字节数
     effective_min_bytes = 1
     if min_bytes is not None:
         effective_min_bytes = min_bytes
     elif min_tokens is not None:
-        effective_min_bytes = min_tokens * 3  # token 转字节
+        effective_min_bytes = min_tokens * 3
 
-    # 内置组
-    config = get_group_config(group_name)
+    if config is None:
+        config = get_group_config(group_name)
+
     if config is not None:
-        max_bytes = config.content.max_tokens * 3  # token 转字节
+        max_bytes = config.content_max_bytes
 
         if content_bytes < effective_min_bytes:
             return False, f"内容过短：至少需要 {effective_min_bytes} 字节", content_bytes
@@ -301,27 +364,16 @@ def validate_content_length(content: str, group_name: str, custom_config: Option
             return False, msg, content_bytes
         return True, None, content_bytes
 
-    # 自定义组
-    if custom_config is not None:
-        max_bytes = custom_config.content_max_bytes
-
-        if content_bytes < effective_min_bytes:
-            return False, f"内容过短：至少需要 {effective_min_bytes} 字节", content_bytes
-
-        if content_bytes > max_bytes:
-            return False, f"内容过长：{content_bytes} 字节，最大允许 {max_bytes} 字节", content_bytes
-        return True, None, content_bytes
-
     return True, None, content_bytes
 
 
-def validate_summary_length(summary: str, group_name: str, custom_config: Optional[CustomGroupConfig] = None, min_tokens: Optional[int] = None, min_bytes: Optional[int] = None) -> tuple[bool, Optional[str], Optional[int]]:
+def validate_summary_length(summary: str, group_name: str, config: Optional[UnifiedGroupConfig] = None, min_tokens: Optional[int] = None, min_bytes: Optional[int] = None) -> tuple[bool, Optional[str], Optional[int]]:
     """验证摘要长度（字节验证）.
 
     Args:
         summary: 摘要
         group_name: 组名称
-        custom_config: 自定义组配置（可选）
+        config: 组配置（可选）
         min_tokens: 最小 token 数（可选，仅用于兼容旧接口，会转换为字节）
         min_bytes: 最小字节数（可选，默认1字节）
 
@@ -330,17 +382,17 @@ def validate_summary_length(summary: str, group_name: str, custom_config: Option
     """
     summary_bytes = len(summary.encode('utf-8'))
 
-    # 计算最小字节数
     effective_min_bytes = 1
     if min_bytes is not None:
         effective_min_bytes = min_bytes
     elif min_tokens is not None:
-        effective_min_bytes = min_tokens * 3  # token 转字节
+        effective_min_bytes = min_tokens * 3
 
-    # 内置组
-    config = get_group_config(group_name)
+    if config is None:
+        config = get_group_config(group_name)
+
     if config is not None:
-        max_bytes = config.summary.max_tokens * 3  # token 转字节
+        max_bytes = config.summary_max_bytes
 
         if summary_bytes < effective_min_bytes:
             return False, f"摘要过短：至少需要 {effective_min_bytes} 字节", summary_bytes
@@ -352,42 +404,29 @@ def validate_summary_length(summary: str, group_name: str, custom_config: Option
             return False, msg, summary_bytes
         return True, None, summary_bytes
 
-    # 自定义组
-    if custom_config is not None:
-        max_bytes = custom_config.summary_max_bytes
-
-        if summary_bytes < effective_min_bytes:
-            return False, f"摘要过短：至少需要 {effective_min_bytes} 字节", summary_bytes
-
-        if summary_bytes > max_bytes:
-            return False, f"摘要过长：{summary_bytes} 字节，最大允许 {max_bytes} 字节", summary_bytes
-        return True, None, summary_bytes
-
     return True, None, summary_bytes
 
 
-def is_group_with_status(group_name: str, custom_config: Optional[CustomGroupConfig] = None) -> bool:
+def is_group_with_status(group_name: str, config: Optional[UnifiedGroupConfig] = None) -> bool:
     """检查组是否支持状态字段."""
-    config = get_group_config(group_name)
+    if config is None:
+        config = get_group_config(group_name)
     if config is not None:
-        return len(config.status_values) > 0
-    if custom_config is not None:
-        return custom_config.enable_status
+        return config.enable_status and len(config.status_values) > 0
     return False
 
 
-def is_group_with_severity(group_name: str, custom_config: Optional[CustomGroupConfig] = None) -> bool:
+def is_group_with_severity(group_name: str, config: Optional[UnifiedGroupConfig] = None) -> bool:
     """检查组是否支持 severity 字段."""
-    config = get_group_config(group_name)
+    if config is None:
+        config = get_group_config(group_name)
     if config is not None:
-        return len(config.severity_values) > 0
-    if custom_config is not None:
-        return custom_config.enable_severity
+        return config.enable_severity and len(config.severity_values) > 0
     return False
 
 
 def all_group_names() -> List[str]:
-    """返回所有组名称列表."""
+    """返回所有内置组名称列表."""
     return GroupType.values()
 
 
@@ -398,14 +437,13 @@ DEFAULT_TAGS = [
 ]
 
 
-import json
 from typing import Tuple
 
 
 def validate_related(
     related: Optional[str] | Optional[Dict[str, List[str]]],
     group_name: str,
-    custom_config: Optional[CustomGroupConfig] = None,
+    config: Optional[UnifiedGroupConfig] = None,
     default_rules: Optional[Dict[str, List[str]]] = None
 ) -> Tuple[bool, str, Optional[Dict[str, List[str]]]]:
     """解析并验证 related 参数.
@@ -413,7 +451,7 @@ def validate_related(
     Args:
         related: JSON 字符串格式或字典格式的关联数据
         group_name: 分组名称
-        custom_config: 自定义组配置（可选）
+        config: 组配置（可选）
         default_rules: 默认关联规则（可选）
 
     Returns:
@@ -421,49 +459,34 @@ def validate_related(
         None 表示不更新，{} 表示删除关联，非空字典表示设置关联
     """
     if related is None:
-        return True, "", None  # 不更新
+        return True, "", None
 
-    # 空字符串视为不设置关联
     if related == "":
         return True, "", None
 
-    # 获取组的关联规则
     allowed_related_to = None
 
-    # 内置组
-    config = get_group_config(group_name)
+    if config is None:
+        config = get_group_config(group_name)
+
     if config is not None:
-        # 检查是否在默认关联规则中（features/fixes/standards 都在）
-        if default_rules and group_name in default_rules:
-            allowed_related_to = default_rules[group_name]
-        elif config.status_values:  # features/fixes 有 status_values
-            allowed_related_to = []
+        if config.allow_related:
+            allowed_related_to = config.allowed_related_to
         else:
             return False, f"分组 '{group_name}' 不支持关联功能", None
 
-    # 自定义组
-    if custom_config is not None:
-        if custom_config.allow_related:
-            allowed_related_to = custom_config.allowed_related_to
-        else:
-            return False, f"分组 '{group_name}' 不支持关联功能", None
-
-    # 如果无法确定关联规则，跳过验证
     if allowed_related_to is None:
-        return True, "", None  # 无效分组名直接通过
+        return True, "", None
 
-    # 处理字典类型（MCP 协议自动解析 JSON 时）
     if isinstance(related, dict):
         related_dict = related
     else:
-        # JSON 字符串解析
         try:
             related_dict = json.loads(related)
         except json.JSONDecodeError:
             return False, "related 参数 JSON 格式无效", None
 
-    # 验证关联目标是否在允许范围内
-    for rel_group, rel_ids in related_dict.items():
+    for rel_group in related_dict.keys():
         if rel_group not in allowed_related_to:
             return False, f"分组 '{group_name}' 只能关联 {', '.join(allowed_related_to)}，不能关联 '{rel_group}'", None
 

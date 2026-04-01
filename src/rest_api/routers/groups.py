@@ -61,9 +61,9 @@ async def create_custom_group(
 
 
 @router.put("/projects/{project_id}/groups/{group_name}")
-async def update_custom_group(
+async def update_group(
     project_id: str = Path(..., description="项目 ID"),
-    group_name: str = Path(..., description="自定义组名称"),
+    group_name: str = Path(..., description="组名称"),
     content_max_bytes: int = Query(None, description="content 字段最大字节数"),
     summary_max_bytes: int = Query(None, description="summary 字段最大字节数"),
     allow_related: bool = Query(None, description="是否允许关联"),
@@ -71,14 +71,14 @@ async def update_custom_group(
     enable_status: bool = Query(None, description="是否开启 status 字段"),
     enable_severity: bool = Query(None, description="是否开启 severity 字段"),
 ):
-    """更新自定义组."""
+    """更新组配置（支持内置组和自定义组）."""
     allowed_list = None
     if allowed_related_to is not None:
         allowed_list = [g.strip() for g in allowed_related_to.split(",") if g.strip()]
         if not allowed_list:
             allowed_list = []
 
-    result = memory.update_custom_group(
+    result = memory.update_group(
         project_id=project_id,
         group_name=group_name,
         content_max_bytes=content_max_bytes,

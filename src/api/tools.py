@@ -11,7 +11,7 @@ from features.instances import memory, call_stats
 from core.groups import (
     validate_group_name,
     is_group_with_status,
-    CustomGroupConfig,
+    UnifiedGroupConfig,
 )
 from models.response import ApiResponse
 from core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode
@@ -395,14 +395,14 @@ def project_add(
 
     # 加载组配置
     group_configs = memory._load_group_configs(project_id)
-    custom_groups_raw = group_configs.get("custom_groups", {})
-    custom_groups = {
-        name: CustomGroupConfig(**cfg) if isinstance(cfg, dict) else cfg
-        for name, cfg in custom_groups_raw.items()
+    all_groups_raw = group_configs.get("groups", {})
+    all_groups = {
+        name: UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
+        for name, cfg in all_groups_raw.items()
     }
     default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
 
-    v = memory.validate_add_item(group, content, summary, status, severity, related, tag_list, custom_groups, default_rules)
+    v = memory.validate_add_item(group, content, summary, status, severity, related, tag_list, all_groups, default_rules)
     if not v["success"]:
         return _error_response(v["error"])
 
@@ -472,14 +472,14 @@ def project_update(
     """
     # 加载组配置
     group_configs = memory._load_group_configs(project_id)
-    custom_groups_raw = group_configs.get("custom_groups", {})
-    custom_groups = {
-        name: CustomGroupConfig(**cfg) if isinstance(cfg, dict) else cfg
-        for name, cfg in custom_groups_raw.items()
+    all_groups_raw = group_configs.get("groups", {})
+    all_groups = {
+        name: UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
+        for name, cfg in all_groups_raw.items()
     }
     default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
 
-    v = memory.validate_update_item(group, item_id, content, summary, related, custom_groups, default_rules)
+    v = memory.validate_update_item(group, item_id, content, summary, related, all_groups, default_rules)
     if not v["success"]:
         return _error_response(v["error"])
 

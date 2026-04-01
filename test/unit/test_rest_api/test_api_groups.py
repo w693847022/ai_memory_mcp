@@ -359,9 +359,9 @@ class TestUpdateCustomGroup:
     def test_update_custom_group_not_found(self, client):
         """测试更新不存在的自定义组."""
         with patch("rest_api.routers.groups.memory") as mock_memory:
-            mock_memory.update_custom_group.return_value = {
+            mock_memory.update_group.return_value = {
                 "success": False,
-                "error": "自定义组 'nonexistent' 不存在"
+                "error": "组 'nonexistent' 不存在"
             }
 
             response = client.put(

@@ -57,8 +57,8 @@ class TestCustomGroupCRUD:
 
             # 验证组配置已保存
             configs = memory._load_group_configs(project_id)
-            assert "apis" in configs.get("custom_groups", {})
-            apis_config = configs["custom_groups"]["apis"]
+            assert "apis" in configs.get("groups", {})
+            apis_config = configs["groups"]["apis"]
             assert apis_config.content_max_bytes == 500
             assert apis_config.summary_max_bytes == 100
             assert apis_config.allow_related == True
@@ -137,7 +137,7 @@ class TestCustomGroupCRUD:
 
             # 验证更新
             configs = memory._load_group_configs(project_id)
-            apis_config = configs["custom_groups"]["apis"]
+            apis_config = configs["groups"]["apis"]
             assert apis_config.content_max_bytes == 1000
             assert apis_config.allow_related == True
             assert apis_config.allowed_related_to == ["notes"]
@@ -182,7 +182,7 @@ class TestCustomGroupCRUD:
 
             # 验证已删除
             configs = memory._load_group_configs(project_id)
-            assert "apis" not in configs.get("custom_groups", {})
+            assert "apis" not in configs.get("groups", {})
 
             print("  ✓ 删除自定义组成功")
         finally:
@@ -791,7 +791,7 @@ class TestCustomGroupPartialUpdate:
 
             # 验证其他字段保持不变
             configs = memory._load_group_configs(project_id)
-            apis_config = configs["custom_groups"]["apis"]
+            apis_config = configs["groups"]["apis"]
             assert apis_config.content_max_bytes == 1000, "content_max_bytes 应该更新"
             assert apis_config.summary_max_bytes == 100, "summary_max_bytes 应该保持不变"
             assert apis_config.allow_related == True, "allow_related 应该保持不变"
@@ -981,6 +981,164 @@ class TestCustomGroupStatusValidation:
                 assert "status" in data.get("error", "").lower()
 
             print("  ✓ 自定义组 status 无效值被拒绝")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class TestBuiltinGroupConfig:
+    """内置组配置测试."""
+
+    def test_builtin_group_default_config(self):
+        """测试内置组默认配置生效."""
+        print("测试: 内置组默认配置...")
+        temp_dir, memory, project_id = _setup_project()
+        try:
+            # 加载组配置
+            configs = memory._load_group_configs(project_id)
+            groups = configs.get("groups", {})
+
+            # 验证内置组默认配置
+            assert "features" in groups
+            assert "fixes" in groups
+            assert "notes" in groups
+            assert "standards" in groups
+
+            features_config = groups["features"]
+            assert features_config.content_max_bytes == 240
+            assert features_config.summary_max_bytes == 90
+            assert features_config.enable_status == True
+            assert features_config.status_values == ["pending", "in_progress", "completed"]
+            assert features_config.is_builtin == True
+
+            fixes_config = groups["fixes"]
+            assert fixes_config.enable_severity == True
+            assert fixes_config.severity_values == ["critical", "high", "medium", "low"]
+
+            notes_config = groups["notes"]
+            assert notes_config.enable_status == False
+            assert notes_config.enable_severity == False
+
+            print("  ✓ 内置组默认配置正确")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_update_builtin_group_config(self):
+        """测试更新内置组配置."""
+        print("测试: 更新内置组配置...")
+        temp_dir, memory, project_id = _setup_project()
+        try:
+            # 更新内置组配置
+            result = memory.update_group(
+                project_id=project_id,
+                group_name="features",
+                content_max_bytes=500,
+                summary_max_bytes=150,
+                allow_related=True,
+                allowed_related_to=["notes", "fixes"]
+            )
+            assert result.get("success"), f"更新内置组失败: {result}"
+
+            # 验证更新
+            configs = memory._load_group_configs(project_id)
+            features_config = configs["groups"]["features"]
+            assert features_config.content_max_bytes == 500
+            assert features_config.summary_max_bytes == 150
+            assert features_config.allowed_related_to == ["notes", "fixes"]
+            assert features_config.is_builtin == True  # 仍然是内置组
+
+            print("  ✓ 更新内置组配置成功")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_list_groups_includes_builtin_config(self):
+        """测试 list_groups 返回内置组完整配置."""
+        print("测试: list_groups 返回内置组配置...")
+        temp_dir, memory, project_id = _setup_project()
+        try:
+            result = memory.list_groups(project_id)
+            assert result.get("success")
+
+            groups = result.get("groups", [])
+            features_group = next((g for g in groups if g["name"] == "features"), None)
+            assert features_group is not None
+            assert features_group["is_builtin"] == True
+            assert features_group["config"]["content_max_bytes"] == 240
+            assert features_group["config"]["enable_status"] == True
+
+            fixes_group = next((g for g in groups if g["name"] == "fixes"), None)
+            assert fixes_group is not None
+            assert fixes_group["config"]["enable_severity"] == True
+
+            print("  ✓ list_groups 返回内置组完整配置")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_builtin_group_item_validation(self):
+        """测试内置组项目验证生效."""
+        print("测试: 内置组项目验证...")
+        temp_dir, memory, project_id = _setup_project()
+        try:
+            # features 组需要 status
+            with patch.object(api.tools, 'memory', memory):
+                result = api.tools.project_add(
+                    project_id=project_id,
+                    group="features",
+                    summary="测试功能",
+                    content="功能内容",
+                    tags="test"
+                )
+                data = json.loads(result)
+                assert not data.get("success"), "features 组缺少 status 应该失败"
+                assert "status" in data.get("error", "")
+
+                # 提供 status 后应该成功
+                result = api.tools.project_add(
+                    project_id=project_id,
+                    group="features",
+                    summary="测试功能",
+                    content="功能内容",
+                    status="pending",
+                    tags="test"
+                )
+                data = json.loads(result)
+                assert data.get("success"), f"提供 status 后应该成功: {data}"
+
+            print("  ✓ 内置组项目验证正确")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_builtin_group_cannot_be_deleted(self):
+        """测试内置组不能被删除."""
+        print("测试: 内置组不能删除...")
+        temp_dir, memory, project_id = _setup_project()
+        try:
+            # 尝试删除内置组
+            result = memory.delete_custom_group(
+                project_id=project_id,
+                group_name="features"
+            )
+            assert not result.get("success"), "内置组不应该被删除"
+            assert "不能删除" in result.get("error", "")
+
+            print("  ✓ 内置组不能删除")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_update_nonexistent_group_fails(self):
+        """测试更新不存在的组失败."""
+        print("测试: 更新不存在的组失败...")
+        temp_dir, memory, project_id = _setup_project()
+        try:
+            # 更新一个不存在的组
+            result = memory.update_group(
+                project_id=project_id,
+                group_name="nonexistent",
+                content_max_bytes=300
+            )
+            assert not result.get("success"), "更新不存在的组应该失败"
+            assert "不存在" in result.get("error", "")
+
+            print("  ✓ 更新不存在的组正确失败")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

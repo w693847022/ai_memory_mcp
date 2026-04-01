@@ -17,7 +17,7 @@ from core.groups import (
     validate_group_name, validate_status, validate_severity, is_reserved_field,
     validate_content_length, validate_summary_length,
     get_group_config, validate_related, get_all_groups,
-    CustomGroupConfig, GroupSettings, DEFAULT_RELATED_RULES,
+    UnifiedGroupConfig, GroupSettings, DEFAULT_RELATED_RULES,
 )
 from models.item import Item, ItemRelated
 
@@ -79,7 +79,7 @@ class ProjectMemory(ProjectStorage):
         severity: str,
         related: Optional[Union[str, Dict[str, List[str]]]],
         tag_list: List[str],
-        custom_groups: Optional[Dict[str, CustomGroupConfig]] = None,
+        custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
         default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         """统一验证添加条目的所有参数.
@@ -171,7 +171,7 @@ class ProjectMemory(ProjectStorage):
         content: Optional[str] = None,
         summary: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]], None]] = None,
-        custom_groups: Optional[Dict[str, CustomGroupConfig]] = None,
+        custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
         default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         """统一验证更新条目参数.
@@ -811,7 +811,7 @@ class ProjectMemory(ProjectStorage):
     # ==================== 分层查询功能 ====================
 
     def list_groups(self, project_id: str) -> Dict[str, Any]:
-        """列出项目的所有分组及其统计信息（包括自定义组）.
+        """列出项目的所有分组及其统计信息（包括内置组和自定义组）.
 
         Args:
             project_id: 项目ID
@@ -825,43 +825,24 @@ class ProjectMemory(ProjectStorage):
 
         # 加载组配置
         group_configs = self._load_group_configs(project_id)
-        custom_groups = group_configs.get("custom_groups", {})
+        all_groups = group_configs.get("groups", {})
 
-        # 内置组
-        groups = [
-            {
-                "name": "features",
-                "is_builtin": True,
-                "count": len(project_data["features"]),
-                "summary": "功能列表"
-            },
-            {
-                "name": "notes",
-                "is_builtin": True,
-                "count": len(project_data["notes"]),
-                "summary": "开发笔记"
-            },
-            {
-                "name": "fixes",
-                "is_builtin": True,
-                "count": len(project_data.get("fixes", [])),
-                "summary": "Bug修复记录"
-            },
-            {
-                "name": "standards",
-                "is_builtin": True,
-                "count": len(project_data.get("standards", [])),
-                "summary": "项目规范"
-            }
-        ]
+        # 内置组默认信息
+        builtin_summaries = {
+            "features": "功能列表",
+            "notes": "开发笔记",
+            "fixes": "Bug修复记录",
+            "standards": "项目规范"
+        }
 
-        # 添加自定义组
-        for group_name, config in custom_groups.items():
+        # 构建所有组列表
+        groups = []
+        for group_name, config in all_groups.items():
             groups.append({
                 "name": group_name,
-                "is_builtin": False,
+                "is_builtin": config.is_builtin,
                 "count": len(project_data.get(group_name, [])),
-                "summary": f"自定义组: {group_name}",
+                "summary": builtin_summaries.get(group_name, f"自定义组: {group_name}"),
                 "config": {
                     "content_max_bytes": config.content_max_bytes,
                     "summary_max_bytes": config.summary_max_bytes,
@@ -869,6 +850,9 @@ class ProjectMemory(ProjectStorage):
                     "allowed_related_to": config.allowed_related_to,
                     "enable_status": config.enable_status,
                     "enable_severity": config.enable_severity,
+                    "status_values": config.status_values,
+                    "severity_values": config.severity_values,
+                    "required_fields": config.required_fields,
                 }
             })
 
@@ -878,7 +862,7 @@ class ProjectMemory(ProjectStorage):
             "groups": groups
         }
 
-    # ==================== 自定义组管理 ====================
+    # ==================== 组管理（统一） ====================
 
     def create_custom_group(
         self,
@@ -891,7 +875,7 @@ class ProjectMemory(ProjectStorage):
         enable_status: bool = True,
         enable_severity: bool = False
     ) -> Dict[str, Any]:
-        """创建自定义组.
+        """创建自定义组（统一接口）.
 
         Args:
             project_id: 项目ID
@@ -906,44 +890,38 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
-        # 检查项目是否存在
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        # 检查是否与保留字段冲突
         if is_reserved_field(group_name):
             return {"success": False, "error": f"组名 '{group_name}' 与系统配置字段冲突"}
 
-        # 检查组是否已存在
-        existing_groups = get_all_groups()
-        if group_name in existing_groups:
-            return {"success": False, "error": f"组名 '{group_name}' 已存在"}
-
         # 加载组配置
         group_configs = self._load_group_configs(project_id)
-        custom_groups = group_configs.get("custom_groups", {})
+        all_groups = group_configs.get("groups", {})
 
-        # 检查自定义组是否已存在
-        if group_name in custom_groups:
-            return {"success": False, "error": f"自定义组 '{group_name}' 已存在"}
+        # 检查组是否已存在
+        if group_name in all_groups:
+            return {"success": False, "error": f"组名 '{group_name}' 已存在"}
 
-        # 创建自定义组配置
-        custom_groups[group_name] = CustomGroupConfig(
+        # 创建组配置
+        all_groups[group_name] = UnifiedGroupConfig(
             content_max_bytes=content_max_bytes,
             summary_max_bytes=summary_max_bytes,
             allow_related=allow_related,
             allowed_related_to=allowed_related_to or [],
             enable_status=enable_status,
-            enable_severity=enable_severity
+            enable_severity=enable_severity,
+            is_builtin=False
         )
-        group_configs["custom_groups"] = custom_groups
+        group_configs["groups"] = all_groups
 
         # 保存配置
         if not self._save_group_configs(project_id, group_configs):
             return {"success": False, "error": "保存组配置失败"}
 
-        # 初始化项目数据中的自定义组
+        # 初始化项目数据中的组
         if group_name not in project_data:
             project_data[group_name] = []
             self._save_project(project_id, project_data)
@@ -953,7 +931,7 @@ class ProjectMemory(ProjectStorage):
             "message": f"自定义组 '{group_name}' 创建成功"
         }
 
-    def update_custom_group(
+    def update_group(
         self,
         project_id: str,
         group_name: str,
@@ -962,38 +940,41 @@ class ProjectMemory(ProjectStorage):
         allow_related: Optional[bool] = None,
         allowed_related_to: Optional[List[str]] = None,
         enable_status: Optional[bool] = None,
-        enable_severity: Optional[bool] = None
+        enable_severity: Optional[bool] = None,
+        status_values: Optional[List[str]] = None,
+        severity_values: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """更新自定义组配置.
+        """更新组配置（统一接口，支持内置组和自定义组）.
 
         Args:
             project_id: 项目ID
-            group_name: 自定义组名称
+            group_name: 组名称
             content_max_bytes: content 字段最大字节数
             summary_max_bytes: summary 字段最大字节数
             allow_related: 是否允许关联
             allowed_related_to: 允许关联的目标组列表
             enable_status: 是否开启 status 字段
             enable_severity: 是否开启 severity 字段
+            status_values: status 可选值列表
+            severity_values: severity 可选值列表
 
         Returns:
             操作结果
         """
-        # 检查项目是否存在
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
         # 加载组配置
         group_configs = self._load_group_configs(project_id)
-        custom_groups = group_configs.get("custom_groups", {})
+        all_groups = group_configs.get("groups", {})
 
-        # 检查自定义组是否存在
-        if group_name not in custom_groups:
-            return {"success": False, "error": f"自定义组 '{group_name}' 不存在"}
+        # 检查组是否存在
+        if group_name not in all_groups:
+            return {"success": False, "error": f"组 '{group_name}' 不存在"}
 
-        # 更新配置（数据类格式）
-        config = custom_groups[group_name]
+        # 更新配置
+        config = all_groups[group_name]
         if content_max_bytes is not None:
             config.content_max_bytes = content_max_bytes
         if summary_max_bytes is not None:
@@ -1006,6 +987,10 @@ class ProjectMemory(ProjectStorage):
             config.enable_status = enable_status
         if enable_severity is not None:
             config.enable_severity = enable_severity
+        if status_values is not None:
+            config.status_values = status_values
+        if severity_values is not None:
+            config.severity_values = severity_values
 
         # 保存配置
         if not self._save_group_configs(project_id, group_configs):
@@ -1013,11 +998,14 @@ class ProjectMemory(ProjectStorage):
 
         return {
             "success": True,
-            "message": f"自定义组 '{group_name}' 更新成功"
+            "message": f"组 '{group_name}' 更新成功"
         }
 
+    # 别名方法，保持向后兼容
+    update_custom_group = update_group
+
     def delete_custom_group(self, project_id: str, group_name: str) -> Dict[str, Any]:
-        """删除自定义组.
+        """删除自定义组（只能删除非内置组）.
 
         Args:
             project_id: 项目ID
@@ -1026,22 +1014,25 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
-        # 检查项目是否存在
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
         # 加载组配置
         group_configs = self._load_group_configs(project_id)
-        custom_groups = group_configs.get("custom_groups", {})
+        all_groups = group_configs.get("groups", {})
 
-        # 检查自定义组是否存在
-        if group_name not in custom_groups:
-            return {"success": False, "error": f"自定义组 '{group_name}' 不存在"}
+        # 检查组是否存在
+        if group_name not in all_groups:
+            return {"success": False, "error": f"组 '{group_name}' 不存在"}
 
-        # 删除自定义组
-        del custom_groups[group_name]
-        group_configs["custom_groups"] = custom_groups
+        # 检查是否为内置组
+        if all_groups[group_name].is_builtin:
+            return {"success": False, "error": f"内置组 '{group_name}' 不能删除"}
+
+        # 删除组
+        del all_groups[group_name]
+        group_configs["groups"] = all_groups
 
         # 保存配置
         if not self._save_group_configs(project_id, group_configs):
