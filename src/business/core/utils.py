@@ -36,14 +36,16 @@ def track_calls(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Import here to avoid circular dependency
-        from features.instances import call_stats
+        from business.call_stats import CallStats
+
+        _call_stats = CallStats()
 
         client = detect_client()
         ip = get_caller_ip()
         tool_name = func.__name__
 
         # 记录调用
-        call_stats.record_call(
+        _call_stats.record_call(
             tool_name=tool_name,
             client=client,
             ip=ip,
@@ -132,3 +134,34 @@ def apply_view_mode(items: list, view_mode: str, summary_fields: list) -> list:
     if view_mode == "summary":
         return [{k: item.get(k) for k in summary_fields} for item in items]
     return items
+
+
+def parse_tags(tags_str: str) -> list:
+    """解析标签字符串为列表."""
+    if not tags_str:
+        return []
+    return [t.strip() for t in tags_str.split(",") if t.strip()]
+
+
+def validate_date(date_str: str) -> bool:
+    """验证日期字符串格式 (YYYY-MM-DD)."""
+    if not date_str:
+        return True
+    try:
+        from datetime import datetime
+        datetime.strptime(date_str, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def filter_tags_by_regex(tags_list: list, summary_regex=None, tag_name_regex=None) -> list:
+    """正则过滤标签列表."""
+    filtered = []
+    for tag_item in tags_list:
+        if summary_regex and not summary_regex.search(tag_item.get("summary", "")):
+            continue
+        if tag_name_regex and not tag_name_regex.search(tag_item.get("tag", "")):
+            continue
+        filtered.append(tag_item)
+    return filtered

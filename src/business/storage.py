@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, Union, List
 from cachetools import TTLCache
 
 from business.core.storage_base import ProjectStorage
-from features.stats import CallStats
+from business.call_stats import CallStats
 
 
 # ===================

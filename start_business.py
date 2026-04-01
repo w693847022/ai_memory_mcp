@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+"""Business API 服务启动脚本.
+
+独立启动 Business HTTP API 服务（端口 8002）。
+"""
+
+import sys
+import os
+from pathlib import Path
+
+# 添加 src 目录到 Python 路径
+src_path = Path(__file__).parent / "src"
+sys.path.insert(0, str(src_path))
+
+if __name__ == "__main__":
+    import uvicorn
+    from business.main import app
+
+    port = int(os.environ.get("BUSINESS_PORT", 8002))
+    host = os.environ.get("BUSINESS_HOST", "0.0.0.0")
+
+    print(f"启动 Business API 服务...")
+    print(f"监听地址: {host}:{port}")
+    print(f"健康检查: http://{host}:{port}/health")
+    print()
+
+    uvicorn.run(app, host=host, port=port)

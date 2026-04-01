@@ -23,7 +23,7 @@ services:
     networks:
       - mcp-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8002/health', timeout=5)"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8002/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -50,6 +50,7 @@ services:
       - MCP_PORT=${MCP_PORT:-8000}
       - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
       - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
+      - BUSINESS_API_URL=${BUSINESS_API_URL:-http://business-server:8002}
     volumes:
       # 挂载项目记忆数据目录（持久化）
       - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai
@@ -78,8 +79,9 @@ services:
       - "${FASTAPI_PORT:-8001}:8001"
     environment:
       - PYTHONUNBUFFERED=1
-      # 直接访问 business 层
+      # HTTP 调用 business 层
       - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
+      - BUSINESS_API_URL=${BUSINESS_API_URL:-http://business-server:8002}
       # 日志配置
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_DIR=/app/logs
