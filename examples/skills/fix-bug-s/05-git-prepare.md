@@ -1,0 +1,34 @@
+## Stage 6: Git Branch Prepare
+
+**目标**: 在代码实现前准备 Git 修复分支
+
+**流程**:
+
+1. 确定当前分支不为 main 或者 master，如果是暂停后向用户确认合并分支
+
+2. 此时已有 `fix_id`（新建的或已存在的）
+
+3. 调用 `git-branch` 技能准备分支：
+   ```
+   Skill: git-branch, args: "prepare <fix_id> fix"
+   ```
+
+4. 技能会：
+   - 检查当前分支是否为 main/master（如果是则拒绝）
+   - 保存当前分支名
+   - 创建或切换到修复分支 `fix-{id}`
+
+---
+
+## 更新开发记录
+
+将分支信息记录到 [<fix_id>-development-log] note
+
+---
+
+## 输出
+
+```
+branch_name: <分支名>
+original_branch: <原分支名>
+```
