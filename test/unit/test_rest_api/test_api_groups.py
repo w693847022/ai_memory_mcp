@@ -269,3 +269,207 @@ class TestManageItemTags:
         )
 
         assert response.status_code == 200
+
+
+class TestCreateCustomGroup:
+    """测试创建自定义组 API."""
+
+    def test_create_custom_group_success(self, client):
+        """测试成功创建自定义组."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.create_custom_group.return_value = {
+                "success": True,
+                "message": "自定义组 'apis' 创建成功"
+            }
+
+            response = client.post(
+                "/api/projects/proj_001/groups",
+                params={
+                    "group_name": "apis",
+                    "content_max_bytes": 500,
+                    "summary_max_bytes": 100,
+                    "allow_related": True,
+                    "allowed_related_to": "notes,features",
+                    "enable_status": True,
+                    "enable_severity": False
+                }
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+
+    def test_create_custom_group_reserved_name(self, client):
+        """测试创建自定义组时保留字段冲突."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.create_custom_group.return_value = {
+                "success": False,
+                "error": "组名 'id' 与系统配置字段冲突"
+            }
+
+            response = client.post(
+                "/api/projects/proj_001/groups",
+                params={"group_name": "id"}
+            )
+
+            assert response.status_code == 400
+            data = response.json()
+            assert "冲突" in data["detail"]
+
+    def test_create_custom_group_duplicate_name(self, client):
+        """测试创建重复名称的自定义组."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.create_custom_group.return_value = {
+                "success": False,
+                "error": "自定义组 'apis' 已存在"
+            }
+
+            response = client.post(
+                "/api/projects/proj_001/groups",
+                params={"group_name": "apis"}
+            )
+
+            assert response.status_code == 400
+            assert "已存在" in response.json()["detail"]
+
+
+class TestUpdateCustomGroup:
+    """测试更新自定义组 API."""
+
+    def test_update_custom_group_success(self, client):
+        """测试成功更新自定义组."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.update_custom_group.return_value = {
+                "success": True,
+                "message": "自定义组 'apis' 更新成功"
+            }
+
+            response = client.put(
+                "/api/projects/proj_001/groups/apis",
+                params={
+                    "content_max_bytes": 1000,
+                    "allow_related": True
+                }
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+
+    def test_update_custom_group_not_found(self, client):
+        """测试更新不存在的自定义组."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.update_custom_group.return_value = {
+                "success": False,
+                "error": "自定义组 'nonexistent' 不存在"
+            }
+
+            response = client.put(
+                "/api/projects/proj_001/groups/nonexistent",
+                params={"content_max_bytes": 1000}
+            )
+
+            assert response.status_code == 400
+            assert "不存在" in response.json()["detail"]
+
+
+class TestDeleteCustomGroup:
+    """测试删除自定义组 API."""
+
+    def test_delete_custom_group_success(self, client):
+        """测试成功删除自定义组."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.delete_custom_group.return_value = {
+                "success": True,
+                "message": "自定义组 'apis' 已删除"
+            }
+
+            response = client.delete("/api/projects/proj_001/groups/apis")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+
+    def test_delete_custom_group_not_found(self, client):
+        """测试删除不存在的自定义组."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.delete_custom_group.return_value = {
+                "success": False,
+                "error": "自定义组 'nonexistent' 不存在"
+            }
+
+            response = client.delete("/api/projects/proj_001/groups/nonexistent")
+
+            assert response.status_code == 400
+            assert "不存在" in response.json()["detail"]
+
+
+class TestGetGroupSettings:
+    """测试获取组设置 API."""
+
+    def test_get_group_settings_success(self, client):
+        """测试成功获取组设置."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.get_group_settings.return_value = {
+                "success": True,
+                "settings": {
+                    "default_related_rules": {
+                        "features": ["notes"],
+                        "fixes": ["features", "notes"]
+                    }
+                }
+            }
+
+            response = client.get("/api/projects/proj_001/group-settings")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert "default_related_rules" in data["data"]
+
+    def test_get_group_settings_error(self, client):
+        """测试获取组设置失败."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.get_group_settings.return_value = {
+                "success": False,
+                "error": "项目不存在"
+            }
+
+            response = client.get("/api/projects/proj_001/group-settings")
+
+            assert response.status_code == 400
+
+
+class TestUpdateGroupSettings:
+    """测试更新组设置 API."""
+
+    def test_update_group_settings_success(self, client):
+        """测试成功更新组设置."""
+        with patch("rest_api.routers.groups.memory") as mock_memory:
+            mock_memory.update_group_settings.return_value = {
+                "success": True,
+                "message": "组设置更新成功"
+            }
+
+            response = client.put(
+                "/api/projects/proj_001/group-settings",
+                params={
+                    "default_related_rules": '{"features": ["notes", "fixes"]}'
+                }
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+
+    def test_update_group_settings_invalid_json(self, client):
+        """测试更新组设置时 JSON 格式无效."""
+        response = client.put(
+            "/api/projects/proj_001/group-settings",
+            params={
+                "default_related_rules": "invalid json"
+            }
+        )
+
+        assert response.status_code == 400
+        assert "JSON" in response.json()["detail"]
