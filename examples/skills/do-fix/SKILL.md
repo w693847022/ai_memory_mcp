@@ -38,7 +38,7 @@ argument-hint: <Bug描述>
 **流程**:
 
 1. 解析入参，提取Bug描述（去掉 `fix:` 前缀）
-2. 调用 `project-confirmation` 技能创建fix记录
+2. 调用 ./project-confirmation.md 技能创建fix记录
    ```
    Skill: project-confirmation, args: "<Bug描述>"
    ```

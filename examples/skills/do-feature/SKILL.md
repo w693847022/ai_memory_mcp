@@ -38,7 +38,7 @@ argument-hint: <功能描述>
 **流程**:
 
 1. 解析入参，提取功能描述（去掉 `feature:` 前缀）
-2. 调用 `project-confirmation` 技能创建feature记录
+2. 调用 ./project-confirmation.md 技能创建feature记录
    ```
    Skill: project-confirmation, args: "<功能描述>"
    ```
