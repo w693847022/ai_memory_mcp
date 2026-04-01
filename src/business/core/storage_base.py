@@ -345,7 +345,7 @@ class ProjectStorage:
         Returns:
             组配置字典，groups 值为 UnifiedGroupConfig 数据类对象
         """
-        from core.groups import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS, DEFAULT_RELATED_RULES
+        from business.core.groups import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS, DEFAULT_RELATED_RULES
 
         config_path = self._get_group_config_path(project_id)
         if config_path.exists():
@@ -408,7 +408,7 @@ class ProjectStorage:
         Returns:
             可序列化的配置字典
         """
-        from core.groups import UnifiedGroupConfig
+        from business.core.groups import UnifiedGroupConfig
 
         result = {}
         for key, value in configs.items():
