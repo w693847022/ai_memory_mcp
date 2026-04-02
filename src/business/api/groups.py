@@ -37,7 +37,6 @@ async def create_custom_group(
         raise HTTPException(status_code=400, detail=f"自定义组 '{group_name}' 已存在")
 
     new_group = UnifiedGroupConfig(
-        group_type=GroupType.CUSTOM,
         content_max_bytes=content_max_bytes,
         summary_max_bytes=summary_max_bytes,
         allow_related=allow_related,
