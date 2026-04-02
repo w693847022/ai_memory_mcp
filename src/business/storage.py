@@ -207,17 +207,18 @@ class Storage(ProjectStorage):
         """
         return self._save_note_content(project_id, note_id, content)
 
-    def generate_item_id(self, prefix: str, project_id: Optional[str] = None) -> str:
+    def generate_item_id(self, prefix: str, project_id: Optional[str] = None, project_data: Optional[Dict] = None) -> str:
         """生成条目ID.
 
         Args:
             prefix: ID前缀
             project_id: 项目ID
+            project_data: 已加载的项目数据（避免重复加载）
 
         Returns:
             唯一ID
         """
-        return self._generate_item_id(prefix, project_id)
+        return self._generate_item_id(prefix, project_id, project_data)
 
     def generate_timestamps(self) -> Dict[str, str]:
         """生成时间戳.

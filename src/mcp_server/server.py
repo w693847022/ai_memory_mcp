@@ -34,54 +34,64 @@ from __init__ import __version__
 
 
 # ===================
-# Server Setup
+# Server Setup (Lazy Initialization)
 # ===================
-# 在服务器初始化前解析参数
-_args = parse_args()
+# 服务器实例延迟到首次访问时创建
+_server = None
 
-# 创建 MCP 服务器实例
-server = FastMCP(
-    name="project-memory-mcp",
-    instructions="项目本地记忆 MCP Server - 提供项目记忆管理和代码搜索功能。",
-    log_level=_args.log_level,
-    host=_args.host,
-    port=_args.port,
-    stateless_http=True,
-    json_response=True,
-)
+def _get_server():
+    """延迟获取或创建服务器实例."""
+    global _server
+    if _server is None:
+        # 在服务器初始化前解析参数
+        args = parse_args()
+
+        # 创建 MCP 服务器实例
+        _server = FastMCP(
+            name="project-memory-mcp",
+            instructions="项目本地记忆 MCP Server - 提供项目记忆管理和代码搜索功能。",
+            log_level=args.log_level,
+            host=args.host,
+            port=args.port,
+            stateless_http=True,
+            json_response=True,
+        )
+
+        # Register Tools
+        _server.tool()(track_calls(project_register))
+        _server.tool()(track_calls(project_rename))
+        _server.tool()(track_calls(project_list))
+        _server.tool()(track_calls(project_groups_list))
+        _server.tool()(track_calls(project_tags_info))
+
+        # CRUD Tools
+        _server.tool()(track_calls(project_add))
+        _server.tool()(track_calls(project_update))
+        _server.tool()(track_calls(project_delete))
+        _server.tool()(track_calls(project_remove))
+        _server.tool()(track_calls(project_item_tag_manage))
+
+        # Tag Management Tools
+        _server.tool()(track_calls(tag_register))
+        _server.tool()(track_calls(tag_update))
+        _server.tool()(track_calls(tag_delete))
+        _server.tool()(track_calls(tag_merge))
+
+        # Query Tools
+        _server.tool()(track_calls(project_get))
+        _server.tool()(track_calls(project_stats))
+
+        # Statistics Tools
+        _server.tool()(track_calls(stats_summary))
+        _server.tool()(track_calls(stats_cleanup))
+
+    return _server
 
 
-# ===================
-# Register Tools
-# ===================
-
-# Project Management Tools
-server.tool()(track_calls(project_register))
-server.tool()(track_calls(project_rename))
-server.tool()(track_calls(project_list))
-server.tool()(track_calls(project_groups_list))
-server.tool()(track_calls(project_tags_info))
-
-# CRUD Tools
-server.tool()(track_calls(project_add))
-server.tool()(track_calls(project_update))
-server.tool()(track_calls(project_delete))
-server.tool()(track_calls(project_remove))
-server.tool()(track_calls(project_item_tag_manage))
-
-# Tag Management Tools
-server.tool()(track_calls(tag_register))
-server.tool()(track_calls(tag_update))
-server.tool()(track_calls(tag_delete))
-server.tool()(track_calls(tag_merge))
-
-# Query Tools
-server.tool()(track_calls(project_get))
-server.tool()(track_calls(project_stats))
-
-# Statistics Tools
-server.tool()(track_calls(stats_summary))
-server.tool()(track_calls(stats_cleanup))
+# 为了向后兼容，提供 server 属性
+@property
+def server():
+    return _get_server()
 
 
 # ===================
@@ -89,5 +99,6 @@ server.tool()(track_calls(stats_cleanup))
 # ===================
 
 if __name__ == "__main__":
+    server = _get_server()
     args = parse_args()
     server.run(transport=args.transport)

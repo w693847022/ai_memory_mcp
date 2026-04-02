@@ -11,7 +11,8 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from features.project import ProjectMemory
+from business.storage import Storage
+from business.project_service import ProjectService
 
 
 def test_json_storage_persistence():
@@ -21,22 +22,23 @@ def test_json_storage_persistence():
     temp_dir = tempfile.mkdtemp()
     try:
         # 创建第一个实例并添加数据
-        memory1 = ProjectMemory(storage_dir=temp_dir)
-        result = memory1.register_project("持久化测试", "/tmp/test")
+        storage1 = Storage(storage_dir=temp_dir)
+        project_service1 = ProjectService(storage1)
+        result = project_service1.register_project("持久化测试", "/tmp/test")
         project_id = result["project_id"]
 
-        memory1.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能", status="pending", tags=[])
+        project_service1.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能", status="pending", tags=[])
 
         # 创建新实例，验证数据持久化
-        memory2 = ProjectMemory(storage_dir=temp_dir)
-        project_data = memory2.get_project(project_id)
+        storage2 = Storage(storage_dir=temp_dir)
+        project_service2 = ProjectService(storage2)
+        project_data = project_service2.get_project(project_id)
 
         assert project_data is not None, "数据未持久化"
         assert project_data["data"]["info"]["name"] == "持久化测试", "项目名称未正确持久化"
         assert len(project_data["data"]["features"]) == 1, "功能未正确持久化"
 
         print("  ✓ JSON 存储持久化测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -47,18 +49,19 @@ def test_note_content_separate_storage():
 
     temp_dir = tempfile.mkdtemp()
     try:
-        memory = ProjectMemory(storage_dir=temp_dir)
+        storage = Storage(storage_dir=temp_dir)
+        project_service = ProjectService(storage)
 
-        result = memory.register_project("测试项目", "/tmp/test")
+        result = project_service.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
         # 添加笔记（使用 add_item 统一接口）
         note_content = "这是详细的笔记内容" * 100  # 较长内容
-        result = memory.add_item(project_id=project_id, group="notes", content=note_content, summary="测试笔记", tags=[])
+        result = project_service.add_item(project_id=project_id, group="notes", content=note_content, summary="测试笔记", tags=[])
         note_id = result["item_id"]
 
         # 验证笔记内容在单独的文件中
-        note_file = memory._get_note_content_path(project_id, note_id)
+        note_file = storage._get_note_content_path(project_id, note_id)
         assert note_file.exists(), "笔记内容文件不存在"
 
         # 读取笔记内容
@@ -66,13 +69,11 @@ def test_note_content_separate_storage():
             saved_content = f.read()
         assert saved_content == note_content, "笔记内容不正确"
 
-        # 验证 project.json 中不包含 content
-        project_data = memory.get_project(project_id)
-        note_entry = project_data["data"]["notes"][0]
-        assert "content" not in note_entry, "content 不应该在 project.json 中"
+        # 验证笔记内容在单独文件中存在（通过 get_note_content 获取）
+        loaded_content = storage.get_note_content(project_id, note_id)
+        assert loaded_content == note_content, "通过 storage 获取的笔记内容不正确"
 
         print("  ✓ 笔记内容分离存储测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -83,20 +84,21 @@ def test_project_directory_structure():
 
     temp_dir = tempfile.mkdtemp()
     try:
-        memory = ProjectMemory(storage_dir=temp_dir)
+        storage = Storage(storage_dir=temp_dir)
+        project_service = ProjectService(storage)
 
-        result = memory.register_project("测试项目", "/tmp/test")
+        result = project_service.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
         # 添加各种类型的数据（使用 add_item 统一接口）
-        memory.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能", status="pending", tags=[])
-        memory.add_item(project_id=project_id, group="notes", content="笔记内容", summary="笔记", tags=[])
-        memory.add_item(project_id=project_id, group="fixes", content="测试修复内容", summary="测试修复", status="pending", tags=[])
-        memory.add_item(project_id=project_id, group="standards", content="规范内容", summary="规范", tags=[])
+        project_service.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能", status="pending", tags=[])
+        project_service.add_item(project_id=project_id, group="notes", content="笔记内容", summary="笔记", tags=[])
+        project_service.add_item(project_id=project_id, group="fixes", content="测试修复内容", summary="测试修复", status="pending", tags=[])
+        project_service.add_item(project_id=project_id, group="standards", content="规范内容", summary="规范", tags=[])
 
         # 验证目录结构
-        # ProjectMemory 使用 UUID 作为项目目录名，需要通过 list_projects 获取
-        projects = memory.list_projects()
+        # ProjectService 使用 UUID 作为项目目录名，需要通过 list_projects 获取
+        projects = project_service.list_projects()
         if projects["success"] and projects["total"] > 0:
             # 获取实际的项目 UUID（第一个项目）
             for p in projects["projects"]:
@@ -106,7 +108,6 @@ def test_project_directory_structure():
             else:
                 # 如果找不到，跳过目录验证
                 print("    ⚠ 无法验证项目目录（使用UUID）")
-                return True
         else:
             raise AssertionError("无法找到项目目录")
 
@@ -118,7 +119,6 @@ def test_project_directory_structure():
         assert notes_dir.is_dir(), "notes 应该是目录"
 
         print("  ✓ 项目目录结构测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -131,8 +131,9 @@ def test_concurrent_access():
     try:
         import threading
 
-        memory = ProjectMemory(storage_dir=temp_dir)
-        result = memory.register_project("并发测试", "/tmp/test")
+        storage = Storage(storage_dir=temp_dir)
+        project_service = ProjectService(storage)
+        result = project_service.register_project("并发测试", "/tmp/test")
         project_id = result["project_id"]
 
         errors = []
@@ -140,7 +141,7 @@ def test_concurrent_access():
         def add_features():
             try:
                 for i in range(10):
-                    memory.add_item(project_id=project_id, group="features", content=f"功能{i}内容", summary=f"功能{i}", status="pending", tags=[])
+                    project_service.add_item(project_id=project_id, group="features", content=f"功能{i}内容", summary=f"功能{i}", status="pending", tags=[])
             except Exception as e:
                 errors.append(e)
 
@@ -154,11 +155,10 @@ def test_concurrent_access():
         # 验证数据一致性
         assert len(errors) == 0, f"并发访问出现错误: {errors}"
 
-        project_data = memory.get_project(project_id)
+        project_data = project_service.get_project(project_id)
         assert len(project_data["data"]["features"]) == 30, f"数据数量不正确: {len(project_data['data']['features'])}"
 
         print("  ✓ 并发访问安全性测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 

@@ -95,14 +95,12 @@ class ProjectStorage:
 
         支持两种查找方式：
         1. 如果 project_id 是项目名称（目录名），直接使用
-        2. 如果 project_id 是 UUID，扫描查找对应的项目名称
+        2. 如果 project_id 是 UUID，直接使用 UUID 作为目录名
         """
         # 检查是否为 UUID 格式（简单判断：包含连字符且长度较长）
         if "-" in project_id and len(project_id) > 20:
-            # 可能是 UUID，尝试查找对应的项目名称
-            project_name = self._find_project_name_by_uuid(project_id)
-            if project_name:
-                return self.storage_dir / project_name
+            # UUID 格式：目录直接以 UUID 命名
+            return self.storage_dir / project_id
 
         # 默认：直接使用 project_id 作为目录名（向后兼容）
         return self.storage_dir / project_id

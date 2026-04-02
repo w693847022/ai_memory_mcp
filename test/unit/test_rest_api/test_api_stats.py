@@ -23,9 +23,26 @@ def client():
 
 @pytest.fixture
 def mock_mcp_client():
-    """Mock MCP 客户端."""
-    with patch("rest_api.routers.stats.mcp_client") as mock:
-        yield mock
+    """Mock business client."""
+    mock_client = Mock()
+    mock_client.project_stats.return_value = {
+        "success": True,
+        "data": {
+            "total_projects": 10,
+            "total_items": 100,
+            "total_tags": 50
+        }
+    }
+    mock_client.stats_summary.return_value = {
+        "success": True,
+        "data": {"summary": "统计数据汇总"}
+    }
+    mock_client.stats_cleanup.return_value = {
+        "success": True,
+        "data": {"deleted_count": 100, "retention_days": 30}
+    }
+    with patch("rest_api.business_client._get_client", return_value=mock_client):
+        yield mock_client
 
 
 class TestGetStats:
@@ -33,7 +50,7 @@ class TestGetStats:
 
     def test_get_stats_all(self, client, mock_mcp_client):
         """测试获取全局统计."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.project_stats.return_value = {
             "success": True,
             "data": {
                 "total_projects": 10,
@@ -51,7 +68,7 @@ class TestGetStats:
 
     def test_get_stats_by_type(self, client, mock_mcp_client):
         """测试按类型获取统计."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_summary.return_value = {
             "success": True,
             "data": {
                 "type": "tool",
@@ -74,7 +91,7 @@ class TestGetStatsSummary:
 
     def test_get_summary_all(self, client, mock_mcp_client):
         """测试获取全部摘要."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_summary.return_value = {
             "success": True,
             "data": {
                 "summary": "统计数据汇总"
@@ -89,7 +106,7 @@ class TestGetStatsSummary:
 
     def test_get_summary_by_tool(self, client, mock_mcp_client):
         """测试按工具获取摘要."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_summary.return_value = {
             "success": True,
             "data": {
                 "tool_name": "project_list",
@@ -103,11 +120,11 @@ class TestGetStatsSummary:
         )
 
         assert response.status_code == 200
-        mock_mcp_client.call_tool.assert_called_once()
+        mock_mcp_client.stats_summary.assert_called_once()
 
     def test_get_summary_by_project(self, client, mock_mcp_client):
         """测试按项目获取摘要."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_summary.return_value = {
             "success": True,
             "data": {
                 "project_id": "proj_001",
@@ -123,7 +140,7 @@ class TestGetStatsSummary:
 
     def test_get_summary_by_date(self, client, mock_mcp_client):
         """测试按日期获取摘要."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_summary.return_value = {
             "success": True,
             "data": {
                 "date": "2026-03-29",
@@ -143,7 +160,7 @@ class TestCleanupStats:
 
     def test_cleanup_stats_default(self, client, mock_mcp_client):
         """测试使用默认保留天数清理."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_cleanup.return_value = {
             "success": True,
             "data": {
                 "deleted_count": 100,
@@ -159,7 +176,7 @@ class TestCleanupStats:
 
     def test_cleanup_stats_custom_days(self, client, mock_mcp_client):
         """测试使用自定义保留天数清理."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_cleanup.return_value = {
             "success": True,
             "data": {
                 "deleted_count": 200,
@@ -175,7 +192,7 @@ class TestCleanupStats:
 
     def test_cleanup_stats_error(self, client, mock_mcp_client):
         """测试清理失败."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_mcp_client.stats_cleanup.return_value = {
             "success": False,
             "error": "清理失败"
         }

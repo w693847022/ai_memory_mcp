@@ -22,18 +22,19 @@ def client():
 
 
 @pytest.fixture
-def mock_mcp_client():
-    """Mock MCP 客户端."""
-    with patch("rest_api.routers.projects.mcp_client") as mock:
-        yield mock
+def mock_business_client():
+    """Mock business client."""
+    mock_client = Mock()
+    with patch("rest_api.business_client._get_client", return_value=mock_client):
+        yield mock_client
 
 
 class TestProjectList:
     """测试项目列表 API."""
 
-    def test_list_projects_success(self, client, mock_mcp_client):
+    def test_list_projects_success(self, client, mock_business_client):
         """测试成功获取项目列表."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.project_list.return_value = {
             "success": True,
             "data": {
                 "projects": [
@@ -53,9 +54,9 @@ class TestProjectList:
         assert "data" in data
         assert data["data"]["total"] == 2
 
-    def test_list_projects_with_filters(self, client, mock_mcp_client):
+    def test_list_projects_with_filters(self, client, mock_business_client):
         """测试带过滤条件获取项目列表."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.project_list.return_value = {
             "success": True,
             "data": {"projects": [], "total": 0}
         }
@@ -65,13 +66,13 @@ class TestProjectList:
         )
 
         assert response.status_code == 200
-        mock_mcp_client.call_tool.assert_called_once()
+        mock_business_client.project_list.assert_called_once()
 
-    def test_list_projects_mcp_error(self, client, mock_mcp_client):
-        """测试 MCP 调用错误."""
-        mock_mcp_client.call_tool.return_value = {
+    def test_list_projects_mcp_error(self, client, mock_business_client):
+        """测试 business client 调用错误."""
+        mock_business_client.project_list.return_value = {
             "success": False,
-            "error": "MCP 连接失败"
+            "error": "Business client 连接失败"
         }
 
         response = client.get("/api/projects")
@@ -84,9 +85,9 @@ class TestProjectList:
 class TestRegisterProject:
     """测试项目注册 API."""
 
-    def test_register_project_success(self, client, mock_mcp_client):
+    def test_register_project_success(self, client, mock_business_client):
         """测试成功注册项目."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.register_project.return_value = {
             "success": True,
             "data": {"id": "proj_new", "name": "新项目"}
         }
@@ -116,9 +117,9 @@ class TestRegisterProject:
 class TestGetProject:
     """测试获取项目详情 API."""
 
-    def test_get_project_success(self, client, mock_mcp_client):
+    def test_get_project_success(self, client, mock_business_client):
         """测试成功获取项目详情."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.get_project.return_value = {
             "success": True,
             "data": {
                 "id": "proj_001",
@@ -134,9 +135,9 @@ class TestGetProject:
         assert data["success"] is True
         assert data["data"]["id"] == "proj_001"
 
-    def test_get_project_not_found(self, client, mock_mcp_client):
+    def test_get_project_not_found(self, client, mock_business_client):
         """测试项目不存在."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.get_project.return_value = {
             "success": False,
             "error": "项目不存在"
         }
@@ -149,29 +150,24 @@ class TestGetProject:
 class TestUpdateProject:
     """测试更新项目 API."""
 
-    def test_update_project_success(self, client, mock_mcp_client):
-        """测试成功更新项目."""
-        mock_mcp_client.call_tool.return_value = {
-            "success": True,
-            "data": {"id": "proj_001", "summary": "新摘要"}
-        }
-
+    def test_update_project_not_supported(self, client, mock_business_client):
+        """测试更新项目接口暂不支持."""
         response = client.put(
             "/api/projects/proj_001",
             params={"summary": "新摘要"}
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         data = response.json()
-        assert data["success"] is True
+        assert "暂不支持" in data["detail"]
 
 
 class TestDeleteProject:
     """测试删除项目 API."""
 
-    def test_delete_project_archive(self, client, mock_mcp_client):
+    def test_delete_project_archive(self, client, mock_business_client):
         """测试归档项目."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.remove_project.return_value = {
             "success": True
         }
 
@@ -183,9 +179,9 @@ class TestDeleteProject:
         data = response.json()
         assert data["success"] is True
 
-    def test_delete_project_permanent(self, client, mock_mcp_client):
+    def test_delete_project_permanent(self, client, mock_business_client):
         """测试永久删除项目."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.remove_project.return_value = {
             "success": True
         }
 
@@ -199,9 +195,9 @@ class TestDeleteProject:
 class TestRenameProject:
     """测试重命名项目 API."""
 
-    def test_rename_project_success(self, client, mock_mcp_client):
+    def test_rename_project_success(self, client, mock_business_client):
         """测试成功重命名项目."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.rename_project.return_value = {
             "success": True,
             "data": {"old_name": "旧名称", "new_name": "新名称"}
         }
@@ -220,9 +216,9 @@ class TestRenameProject:
 class TestProjectGroups:
     """测试项目分组 API."""
 
-    def test_list_groups_success(self, client, mock_mcp_client):
+    def test_list_groups_success(self, client, mock_business_client):
         """测试成功获取分组列表."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.list_groups.return_value = {
             "success": True,
             "data": {
                 "groups": ["features", "notes", "fixes", "standards"]
@@ -240,9 +236,9 @@ class TestProjectGroups:
 class TestProjectTags:
     """测试项目标签 API."""
 
-    def test_list_tags_success(self, client, mock_mcp_client):
+    def test_list_tags_success(self, client, mock_business_client):
         """测试成功获取标签列表."""
-        mock_mcp_client.call_tool.return_value = {
+        mock_business_client.project_tags_info.return_value = {
             "success": True,
             "data": {
                 "tags": [

@@ -46,13 +46,15 @@ class TestHealthCheck:
 class TestErrorHandling:
     """测试错误处理."""
 
-    @patch("rest_api.routers.projects.mcp_client")
-    def test_mcp_connection_error(self, mock_mcp, client):
+    @patch("rest_api.business_client._get_client")
+    def test_mcp_connection_error(self, mock_get_client, client):
         """测试 MCP 连接错误."""
-        mock_mcp.call_tool.return_value = {
+        mock_client = Mock()
+        mock_client.project_list.return_value = {
             "success": False,
             "error": "MCP 连接失败"
         }
+        mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
 
@@ -61,25 +63,29 @@ class TestErrorHandling:
         assert "detail" in data
         assert "MCP 连接失败" in data["detail"]
 
-    @patch("rest_api.routers.projects.mcp_client")
-    def test_mcp_timeout_error(self, mock_mcp, client):
+    @patch("rest_api.business_client._get_client")
+    def test_mcp_timeout_error(self, mock_get_client, client):
         """测试 MCP 超时错误."""
-        mock_mcp.call_tool.return_value = {
+        mock_client = Mock()
+        mock_client.project_list.return_value = {
             "success": False,
             "error": "MCP tool execution timeout"
         }
+        mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
 
         assert response.status_code == 400
 
-    @patch("rest_api.routers.projects.mcp_client")
-    def test_invalid_response_format(self, mock_mcp, client):
+    @patch("rest_api.business_client._get_client")
+    def test_invalid_response_format(self, mock_get_client, client):
         """测试无效响应格式."""
-        mock_mcp.call_tool.return_value = {
+        mock_client = Mock()
+        mock_client.project_list.return_value = {
             "success": False,
             "error": "Invalid JSON response"
         }
+        mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
 
@@ -131,13 +137,15 @@ class TestValidationErrors:
 class TestApiResponseFormat:
     """测试统一响应格式."""
 
-    @patch("rest_api.routers.projects.mcp_client")
-    def test_success_response_format(self, mock_mcp, client):
+    @patch("rest_api.business_client._get_client")
+    def test_success_response_format(self, mock_get_client, client):
         """测试成功响应格式."""
-        mock_mcp.call_tool.return_value = {
+        mock_client = Mock()
+        mock_client.project_list.return_value = {
             "success": True,
             "data": {"test": "data"}
         }
+        mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
 
@@ -147,13 +155,15 @@ class TestApiResponseFormat:
         assert "data" in data
         assert data["success"] is True
 
-    @patch("rest_api.routers.projects.mcp_client")
-    def test_error_response_format(self, mock_mcp, client):
+    @patch("rest_api.business_client._get_client")
+    def test_error_response_format(self, mock_get_client, client):
         """测试错误响应格式."""
-        mock_mcp.call_tool.return_value = {
+        mock_client = Mock()
+        mock_client.project_list.return_value = {
             "success": False,
             "error": "测试错误"
         }
+        mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
 

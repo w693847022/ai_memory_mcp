@@ -34,7 +34,6 @@ def test_id_generation():
     assert re.match(standard_pattern, "std_20260322_1"), "standards ID 格式不正确"
 
     print("  ✓ ID 生成格式测试通过")
-    return True
 
 
 def test_group_normalization():
@@ -55,14 +54,13 @@ def test_group_normalization():
         assert not is_valid, f"'{invalid}' 应该是无效的分组名"
 
     print("  ✓ 分组验证测试通过")
-    return True
 
 
 def test_tag_parsing():
     """测试标签解析."""
     print("测试: 标签解析...")
 
-    from api.tools import _parse_tags
+    from mcp_server.tools import _parse_tags
 
     # 测试逗号分隔
     tags = _parse_tags("tag1,tag2,tag3")
@@ -77,7 +75,6 @@ def test_tag_parsing():
     assert tags == [], f"空字符串应该返回空列表: {tags}"
 
     print("  ✓ 标签解析测试通过")
-    return True
 
 
 def test_content_validation():
@@ -104,7 +101,6 @@ def test_content_validation():
     assert not valid, "1字符不应该满足 min_tokens=1"
 
     print("  ✓ 内容长度验证测试通过")
-    return True
 
 
 def test_track_calls_decorator():
@@ -120,8 +116,9 @@ def test_track_calls_decorator():
 
         # 使用 mock 验证 record_call 被调用
         from unittest.mock import MagicMock
-        with patch("features.instances.call_stats") as mock_stats:
-            mock_stats.record_call = MagicMock()
+        with patch("business.call_stats.CallStats") as MockCallStats:
+            mock_instance = MagicMock()
+            MockCallStats.return_value = mock_instance
 
             @track_calls
             def dummy_func():
@@ -131,14 +128,13 @@ def test_track_calls_decorator():
             result = dummy_func()
 
             assert result == "result", "函数返回值应该不变"
-            mock_stats.record_call.assert_called_once()
-            call_kwargs = mock_stats.record_call.call_args.kwargs
+            mock_instance.record_call.assert_called_once()
+            call_kwargs = mock_instance.record_call.call_args.kwargs
             assert call_kwargs["tool_name"] == "dummy_func"
             assert "client" in call_kwargs
             assert "ip" in call_kwargs
 
         print("  ✓ track_calls 装饰器测试通过")
-        return True
     finally:
         if original_storage is not None:
             os.environ["MCP_STORAGE_DIR"] = original_storage
@@ -169,7 +165,6 @@ def test_validate_view_mode():
     assert not is_valid, "空字符串应无效"
 
     print("  ✓ validate_view_mode 测试通过")
-    return True
 
 
 def test_validate_regex_pattern():
@@ -198,7 +193,6 @@ def test_validate_regex_pattern():
     assert "tag_name_pattern" in error
 
     print("  ✓ validate_regex_pattern 测试通过")
-    return True
 
 
 def test_apply_view_mode():
@@ -225,7 +219,6 @@ def test_apply_view_mode():
     assert set(result[0].keys()) == {"id", "name", "summary", "tags"}
 
     print("  ✓ apply_view_mode 测试通过")
-    return True
 
 
 def run_all_tests():
