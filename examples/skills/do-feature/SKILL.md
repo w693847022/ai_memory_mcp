@@ -1,6 +1,6 @@
 ---
 name: do-feature
-description: 简短功能开发 - 简化流程: 需求澄清->方案选择->代码修改（通过 feature: 触发）
+description: feature 简短功能开发 - 简化流程: 需求澄清->方案选择->代码修改
 allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_get, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, Read, Grep, Glob, Bash, Skill
 argument-hint: <功能描述>
 ---

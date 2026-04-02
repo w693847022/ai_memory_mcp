@@ -8,14 +8,27 @@ import httpx
 from typing import Optional, Dict, List, Union, Any
 from common.response import ApiResponse
 
-# Business API 服务地址
-BUSINESS_API_BASE_URL = os.environ.get("BUSINESS_API_URL", "http://localhost:8002")
+
+def _get_business_api_url() -> str:
+    """动态获取 Business API 服务地址."""
+    return os.environ.get("BUSINESS_API_URL", "http://localhost:8002")
 
 
 class BusinessApiClient:
     """Business API HTTP 客户端."""
 
-    def __init__(self, base_url: str = BUSINESS_API_BASE_URL, timeout: float = 30.0):
+    def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
+        """初始化客户端.
+
+        Args:
+            base_url: Business API 服务地址，如果为 None 则从环境变量获取
+            timeout: 请求超时时间（秒）
+        """
+        if base_url is None:
+            base_url = _get_business_api_url()
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self._client: Optional[httpx.Client] = None
         """初始化客户端.
 
         Args:
@@ -56,6 +69,29 @@ class BusinessApiClient:
             response.raise_for_status()
             result = response.json()
             return ApiResponse.from_dict(result)
+        except httpx.HTTPStatusError as e:
+            # 尝试解析响应体中的详细错误信息
+            try:
+                error_detail = e.response.json()
+                if isinstance(error_detail, dict) and "detail" in error_detail:
+                    detail = error_detail["detail"]
+                    # 如果是列表（FastAPI 验证错误），提取有用的信息
+                    if isinstance(detail, list):
+                        errors = []
+                        for item in detail:
+                            if isinstance(item, dict):
+                                msg = item.get("msg", "")
+                                loc = item.get("loc", [])
+                                if loc:
+                                    errors.append(f"{loc[-1] if loc else '参数'}: {msg}")
+                                else:
+                                    errors.append(msg)
+                        error_msg = "; ".join(errors)
+                        return ApiResponse(success=False, error=error_msg)
+                    return ApiResponse(success=False, error=str(detail))
+                return ApiResponse(success=False, error=str(e))
+            except Exception:
+                return ApiResponse(success=False, error=str(e))
         except httpx.HTTPError as e:
             return ApiResponse(success=False, error=str(e))
         except Exception as e:
@@ -107,8 +143,8 @@ class BusinessApiClient:
         tags: str = ""
     ) -> ApiResponse:
         """注册新项目."""
-        data = {"name": name, "path": path, "summary": summary, "tags": tags}
-        return self._post("/api/projects", params=data)
+        params = {"name": name, "path": path, "summary": summary, "tags": tags}
+        return self._post("/api/projects", params=params)
 
     def get_project(self, project_id: str) -> ApiResponse:
         """获取项目详情."""
@@ -198,8 +234,8 @@ class BusinessApiClient:
         tags: str = ""
     ) -> ApiResponse:
         """添加项目条目."""
+        # group 作为查询参数，其他作为 JSON 请求体
         data = {
-            "group": group,
             "content": content,
             "summary": summary,
             "status": status,
@@ -207,7 +243,9 @@ class BusinessApiClient:
             "related": related,
             "tags": tags
         }
-        return self._post(f"/api/projects/{project_id}/items", params=data)
+        # 移除 None 值
+        data = {k: v for k, v in data.items() if v is not None}
+        return self._post(f"/api/projects/{project_id}/items", params={"group": group}, json=data)
 
     def project_update(
         self,
@@ -222,8 +260,8 @@ class BusinessApiClient:
         tags: Optional[str] = None
     ) -> ApiResponse:
         """更新项目条目."""
+        # group 作为查询参数，其他作为 JSON 请求体
         data = {
-            "group": group,
             "content": content,
             "summary": summary,
             "status": status,
@@ -233,7 +271,7 @@ class BusinessApiClient:
         }
         # 移除 None 值
         data = {k: v for k, v in data.items() if v is not None}
-        return self._put(f"/api/projects/{project_id}/items/{item_id}", params=data)
+        return self._put(f"/api/projects/{project_id}/items/{item_id}", params={"group": group}, json=data)
 
     def project_delete(self, project_id: str, group: str, item_id: str) -> ApiResponse:
         """删除项目条目."""
@@ -250,14 +288,14 @@ class BusinessApiClient:
         tags: str = ""
     ) -> ApiResponse:
         """管理条目标签."""
-        data = {
+        params = {
             "group_name": group_name,
             "item_id": item_id,
             "operation": operation,
             "tag": tag,
             "tags": tags
         }
-        return self._post(f"/api/projects/{project_id}/items/{item_id}/tags", params=data)
+        return self._post(f"/api/projects/{project_id}/items/{item_id}/tags", params=params)
 
     # ===================
     # Tag APIs
@@ -271,8 +309,8 @@ class BusinessApiClient:
         aliases: str = ""
     ) -> ApiResponse:
         """注册项目标签."""
-        data = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
-        return self._post("/api/tags/register", params=data)
+        params = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
+        return self._post("/api/tags/register", params=params)
 
     def tag_update(
         self,
@@ -281,9 +319,11 @@ class BusinessApiClient:
         summary: Optional[str] = None
     ) -> ApiResponse:
         """更新已注册标签."""
-        data = {"project_id": project_id, "tag_name": tag_name, "summary": summary}
-        data = {k: v for k, v in data.items() if v is not None}
-        return self._put("/api/tags/update", params=data)
+        params = {"project_id": project_id, "tag_name": tag_name}
+        params = {k: v for k, v in params.items() if v is not None}
+        if summary is not None:
+            params["summary"] = summary
+        return self._put("/api/tags/update", params=params)
 
     def tag_delete(
         self,
@@ -302,8 +342,8 @@ class BusinessApiClient:
         new_tag: str
     ) -> ApiResponse:
         """合并标签."""
-        data = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
-        return self._post("/api/tags/merge", params=data)
+        params = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
+        return self._post("/api/tags/merge", params=params)
 
     # ===================
     # Stats APIs
@@ -344,7 +384,7 @@ class BusinessApiClient:
         enable_severity: bool = False
     ) -> ApiResponse:
         """创建自定义组."""
-        data = {
+        params = {
             "project_id": project_id,
             "group_name": group_name,
             "content_max_bytes": content_max_bytes,
@@ -354,7 +394,7 @@ class BusinessApiClient:
             "enable_status": enable_status,
             "enable_severity": enable_severity
         }
-        return self._post("/api/groups/custom", params=data)
+        return self._post("/api/groups/custom", params=params)
 
     def update_group(
         self,
@@ -368,13 +408,13 @@ class BusinessApiClient:
         enable_severity: Optional[bool] = None
     ) -> ApiResponse:
         """更新组配置."""
-        data = {"project_id": project_id, "group_name": group_name}
+        params = {"project_id": project_id, "group_name": group_name}
         for k, v in [("content_max_bytes", content_max_bytes), ("summary_max_bytes", summary_max_bytes),
                      ("allow_related", allow_related), ("allowed_related_to", allowed_related_to),
                      ("enable_status", enable_status), ("enable_severity", enable_severity)]:
             if v is not None:
-                data[k] = v
-        return self._put("/api/groups/custom", params=data)
+                params[k] = v
+        return self._put("/api/groups/custom", params=params)
 
     def delete_custom_group(self, project_id: str, group_name: str) -> ApiResponse:
         """删除自定义组."""
@@ -391,8 +431,8 @@ class BusinessApiClient:
         default_related_rules: Optional[Dict] = None
     ) -> ApiResponse:
         """更新组设置."""
-        data = {"project_id": project_id, "default_related_rules": default_related_rules}
-        return self._put("/api/groups/settings", params=data)
+        params = {"project_id": project_id, "default_related_rules": default_related_rules}
+        return self._put("/api/groups/settings", params=params)
 
 
 # 全局客户端实例

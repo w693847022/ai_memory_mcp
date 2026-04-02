@@ -1,7 +1,7 @@
 """分组管理 API 路由."""
 
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Query, Path, HTTPException
 
@@ -335,4 +335,97 @@ async def manage_item_tags(
     result = api_manage_item_tags(**kwargs)
     if result.success:
         return ApiResponse.success_resp(data=result.data, message="标签操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+# ===================
+# 兼容 Business API 路径格式的端点
+# ===================
+
+@router.post("/groups/custom")
+async def create_custom_group_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    group_name: str = Query(..., description="自定义组名称"),
+    content_max_bytes: int = Query(240, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(90, description="summary 字段最大字节数"),
+    allow_related: bool = Query(False, description="是否允许关联"),
+    allowed_related_to: str = Query("", description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(True, description="是否开启 status 字段"),
+    enable_severity: bool = Query(False, description="是否开启 severity 字段"),
+):
+    """创建自定义组 (兼容 Business API 路径)."""
+    result = api_create_custom_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_related_to,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+    )
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/groups/custom")
+async def update_group_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    group_name: str = Query(..., description="组名称"),
+    content_max_bytes: int = Query(None, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(None, description="summary 字段最大字节数"),
+    allow_related: bool = Query(None, description="是否允许关联"),
+    allowed_related_to: str = Query(None, description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(None, description="是否开启 status 字段"),
+    enable_severity: bool = Query(None, description="是否开启 severity 字段"),
+):
+    """更新组配置（兼容 Business API 路径）."""
+    result = api_update_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_related_to,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+    )
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.get("/groups/settings")
+async def get_group_settings_compat(
+    project_id: str = Query(..., description="项目 ID"),
+):
+    """获取组设置 (兼容 Business API 路径)."""
+    result = api_get_group_settings(project_id)
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/groups/settings")
+async def update_group_settings_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    default_related_rules: str = Query(None, description="默认关联规则（JSON 字符串）"),
+):
+    """更新组设置 (兼容 Business API 路径)."""
+    import json
+
+    rules = None
+    if default_related_rules:
+        try:
+            rules = json.loads(default_related_rules)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="default_related_rules JSON 格式无效")
+
+    result = api_update_group_settings(
+        project_id=project_id,
+        default_related_rules=rules,
+    )
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
     raise HTTPException(status_code=400, detail=result.error)

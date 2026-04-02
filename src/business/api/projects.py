@@ -1,6 +1,6 @@
 """Business API - Projects 路由."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 from typing import Optional
 
 from business.core.groups import (
@@ -131,7 +131,7 @@ async def list_groups(project_id: str):
     """列出项目的所有分组."""
     result = _project_service.list_groups(project_id)
     if result["success"]:
-        return ApiResponse(success=True, data=result.get("data")).to_dict()
+        return ApiResponse(success=True, data={"groups": result.get("groups")}).to_dict()
     raise HTTPException(status_code=404, detail=result.get("error"))
 
 
@@ -372,12 +372,12 @@ async def project_get(
 async def project_add(
     project_id: str,
     group: str,
-    content: str = "",
-    summary: str = "",
-    status: str = None,
-    severity: str = "medium",
-    related: str = "",
-    tags: str = ""
+    content: str = Body(""),
+    summary: str = Body(""),
+    status: str = Body(None),
+    severity: str = Body("medium"),
+    related: str = Body(""),
+    tags: str = Body("")
 ):
     """添加项目条目."""
     tag_list = parse_tags(tags)
@@ -418,14 +418,14 @@ async def project_add(
 @router.put("/projects/{project_id}/items/{item_id}")
 async def project_update(
     project_id: str,
-    group: str,
     item_id: str,
-    content: str = None,
-    summary: str = None,
+    group: str,
+    content: str = Body(None),
+    summary: str = Body(None),
     status: str = None,
     severity: str = None,
-    related: str = None,
-    tags: str = None
+    related: str = Body(None),
+    tags: str = Body(None)
 ):
     """更新项目条目."""
     group_configs = _storage.get_group_configs(project_id)

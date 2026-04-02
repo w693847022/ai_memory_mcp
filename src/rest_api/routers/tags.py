@@ -14,7 +14,81 @@ router = APIRouter()
 
 
 # ===================
-# 标签管理 API
+# 兼容 Business API 路径格式的端点
+# ===================
+
+@router.post("/tags/register")
+async def register_tag_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    tag_name: str = Query(..., description="标签名称"),
+    summary: str = Query(..., description="标签语义摘要"),
+    aliases: str = Query("", description="别名（逗号分隔）"),
+):
+    """注册项目标签 (兼容 Business API 路径)."""
+    result = api_tag_register(
+        project_id=project_id,
+        tag_name=tag_name,
+        summary=summary,
+        aliases=aliases,
+    )
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="标签注册成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/tags/update")
+async def update_tag_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    tag_name: str = Query(..., description="标签名称"),
+    summary: str = Query(..., description="新摘要"),
+):
+    """更新已注册标签的语义信息 (兼容 Business API 路径)."""
+    result = api_tag_update(
+        project_id=project_id,
+        tag_name=tag_name,
+        summary=summary,
+    )
+    if result.success:
+        return ApiResponse.success_resp(message="标签更新成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.delete("/tags/delete")
+async def delete_tag_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    tag_name: str = Query(..., description="标签名称"),
+    force: str = Query("false", description="是否强制删除"),
+):
+    """删除标签注册 (兼容 Business API 路径)."""
+    result = api_tag_delete(
+        project_id=project_id,
+        tag_name=tag_name,
+        force=force,
+    )
+    if result.success:
+        return ApiResponse.success_resp(message="标签删除成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.post("/tags/merge")
+async def merge_tags_compat(
+    project_id: str = Query(..., description="项目 ID"),
+    old_tag: str = Query(..., description="旧标签名称"),
+    new_tag: str = Query(..., description="新标签名称"),
+):
+    """合并标签：将所有 old_tag 的引用迁移到 new_tag (兼容 Business API 路径)."""
+    result = api_tag_merge(
+        project_id=project_id,
+        old_tag=old_tag,
+        new_tag=new_tag,
+    )
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="标签合并成功")
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+# ===================
+# 原有标签管理 API
 # ===================
 
 @router.get("/tags")
@@ -58,23 +132,6 @@ async def register_tag(
     )
     if result.success:
         return ApiResponse.success_resp(data=result.data, message="标签注册成功")
-    raise HTTPException(status_code=400, detail=result.error)
-
-
-@router.put("/tags/merge")
-async def merge_tags(
-    project_id: str = Query(..., description="项目 ID"),
-    old_tag: str = Query(..., description="旧标签名称"),
-    new_tag: str = Query(..., description="新标签名称"),
-):
-    """合并标签：将所有 old_tag 的引用迁移到 new_tag."""
-    result = api_tag_merge(
-        project_id=project_id,
-        old_tag=old_tag,
-        new_tag=new_tag,
-    )
-    if result.success:
-        return ApiResponse.success_resp(data=result.data, message="标签合并成功")
     raise HTTPException(status_code=400, detail=result.error)
 
 
