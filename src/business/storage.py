@@ -260,7 +260,11 @@ class Storage(ProjectStorage):
         Returns:
             操作结果
         """
-        return self._compress_and_archive_project(project_id)
+        result = self._compress_and_archive_project(project_id)
+        # 归档成功后清理项目锁，防止内存泄漏
+        if result.get("success"):
+            self._cleanup_project_lock(project_id)
+        return result
 
     def is_archived(self, project_id: str) -> bool:
         """检查项目是否已归档.

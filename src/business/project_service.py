@@ -5,6 +5,7 @@
 
 from datetime import datetime
 from typing import Optional, Dict, List, Any, Union
+import threading
 
 from business.core.groups import (
     GroupType, all_group_names, DEFAULT_TAGS,
@@ -33,6 +34,39 @@ class ProjectService:
             storage: 存储层实例（需要实现项目数据访问方法）
         """
         self.storage = storage
+        # 项目级锁字典（用于服务层并发控制）
+        self._project_locks: Dict[str, threading.Lock] = {}
+        self._locks_lock = threading.Lock()  # 保护 project_locks 字典的锁 = storage
+
+    # ==================== 锁管理 ====================
+
+    def _get_project_lock(self, project_id: str) -> threading.Lock:
+        """获取项目级锁（双重检查锁定）.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            该项目的锁对象
+        """
+        lock = self._project_locks.get(project_id)
+        if lock is None:
+            with self._locks_lock:
+                lock = self._project_locks.get(project_id)
+                if lock is None:
+                    lock = threading.Lock()
+                    self._project_locks[project_id] = lock
+        return lock
+
+    def _cleanup_project_lock(self, project_id: str) -> None:
+        """清理项目锁（在项目删除时调用）.
+
+        Args:
+            project_id: 项目ID
+        """
+        with self._locks_lock:
+            if project_id in self._project_locks:
+                del self._project_locks[project_id]
 
     # ==================== 验证辅助方法 ====================
 
@@ -502,7 +536,8 @@ class ProjectService:
         status: Optional[str] = None,
         severity: Optional[str] = None,
         related: Optional[Dict[str, List[str]]] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
         """更新项目条目.
 
@@ -516,77 +551,82 @@ class ProjectService:
             severity: 严重程度更新（可选）
             related: 关联更新（可选）
             tags: 标签更新（可选）
+            expected_version: 期望的版本号（可选，用于乐观锁）
 
         Returns:
             操作结果
         """
-        project_data = self.storage.get_project_data(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        items = project_data.get(group, [])
-        item_index = None
-
-        for i, item in enumerate(items):
-            if item.get("id") == item_id:
-                item_index = i
-                break
-
-        if item_index is None:
-            return {"success": False, "error": f"在分组 '{group}' 中找不到条目 '{item_id}'"}
-
-        item = items[item_index]
-        old_tags = item.get("tags", [])
-
-        # 更新字段
+        # 准备更新字段（不要先调用 get_project_data，避免死锁！）
+        updates = {}
         if content is not None:
-            item["content"] = content
+            updates["content"] = content
         if summary is not None:
-            item["summary"] = summary
+            updates["summary"] = summary
         if status is not None:
-            item["status"] = status
+            updates["status"] = status
         if severity is not None:
-            item["severity"] = severity
+            updates["severity"] = severity
         if related is not None:
-            item["related"] = related
+            updates["related"] = related
         if tags is not None:
-            item["tags"] = tags
+            updates["tags"] = tags
 
         # 更新时间戳
-        self.storage.update_timestamp(item)
+        timestamps = self.storage.generate_timestamps()
+        updates["updated_at"] = timestamps["updated_at"]
 
-        # 更新标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
-        removed_tags = set(old_tags) - set(tags or [])
-        added_tags = set(tags or []) - set(old_tags)
+        # 直接调用 CAS 方法，让它返回旧数据（避免死锁）
+        result = self.storage.update_item_with_version_check(
+            project_id=project_id,
+            group=group,
+            item_id=item_id,
+            expected_version=expected_version,
+            updates=updates
+        )
 
-        for tag in removed_tags:
-            if tag in tag_registry:
-                tag_registry[tag]["usage_count"] = max(0, tag_registry[tag].get("usage_count", 0) - 1)
+        if not result.get("success"):
+            return result
 
-        for tag in added_tags:
-            if tag in tag_registry:
-                tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
+        # CAS 成功后，处理非原子操作（在锁外）
+        # 这些操作即使失败也不影响数据一致性
+        old_item = result.get("old_item", {})
+        old_tags = old_item.get("tags", [])
 
-        # 更新项目更新时间
-        self.storage.update_timestamp(project_data["info"])
+        # 更新成功后，处理标签计数和独立 content 文件
+        # 注意：这里需要重新加载 project_data 来获取最新的 tag_registry
+        project_data = self.storage.get_project_data(project_id)
+        if project_data is not None:
+            tag_registry = project_data.get("tag_registry", {})
+            removed_tags = set(old_tags) - set(tags or [])
+            added_tags = set(tags or []) - set(old_tags)
 
-        # 保存
-        if self.storage.save_project_data(project_id, project_data):
-            # 更新独立 content 文件
-            if group in CONTENT_SEPARATE_GROUPS and content is not None:
-                self.storage.save_item_content(project_id, group, item_id, content)
+            for tag in removed_tags:
+                if tag in tag_registry:
+                    tag_registry[tag]["usage_count"] = max(0, tag_registry[tag].get("usage_count", 0) - 1)
 
-            return {
-                "success": True,
-                "project_id": project_id,
-                "group": group,
-                "item_id": item_id,
-                "item": item,
-                "message": f"条目 '{item_id}' 已更新"
-            }
+            for tag in added_tags:
+                if tag in tag_registry:
+                    tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
 
-        return {"success": False, "error": "保存数据失败"}
+            # 更新项目更新时间
+            self.storage.update_timestamp(project_data["info"])
+
+            # 保存标签计数更新
+            self.storage.save_project_data(project_id, project_data)
+
+        # 更新独立 content 文件
+        if group in CONTENT_SEPARATE_GROUPS and content is not None:
+            self.storage.save_item_content(project_id, group, item_id, content)
+
+        return {
+            "success": True,
+            "project_id": project_id,
+            "group": group,
+            "item_id": item_id,
+            "item": result.get("item"),
+            "version": result.get("version"),
+            "message": f"条目 '{item_id}' 已更新"
+        }
 
     def delete_item(
         self,
@@ -671,6 +711,9 @@ class ProjectService:
             if project_dir.exists():
                 import shutil
                 shutil.rmtree(project_dir)
+
+            # 清理项目锁，防止内存泄漏
+            self.storage._cleanup_project_lock(project_id)
 
             # 从缓存移除
             self.storage.refresh_projects_cache()

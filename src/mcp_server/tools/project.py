@@ -174,7 +174,8 @@ def project_update(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     related: Optional[Union[str, Dict[str, List[str]]]] = None,
-    tags: Optional[str] = None
+    tags: Optional[str] = None,
+    version: Optional[int] = None
 ) -> str:
     """更新项目条目（统一接口）.
 
@@ -188,6 +189,7 @@ def project_update(
         severity: 严重程度更新（仅 fixes）
         related: 关联条目更新（可选）
         tags: 标签更新（可选）
+        version: 版本号（可选，用于乐观锁并发控制）
 
     Returns:
         JSON 格式的操作结果
@@ -206,7 +208,8 @@ def project_update(
         status=status,
         severity=severity,
         related=related_str,
-        tags=tags
+        tags=tags,
+        version=version
     )
     return _tool_response(result)
 

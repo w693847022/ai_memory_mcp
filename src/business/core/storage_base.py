@@ -62,6 +62,37 @@ class ProjectStorage:
             timer=time.time
         )
 
+        # 项目级锁字典（用于并发控制）
+        self._project_locks: Dict[str, threading.Lock] = {}
+        self._locks_lock = threading.Lock()  # 保护 project_locks 字典的锁
+
+    def _get_project_lock(self, project_id: str) -> threading.Lock:
+        """获取项目级锁（双重检查锁定）.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            该项目的专用锁对象
+        """
+        lock = self._project_locks.get(project_id)
+        if lock is None:
+            with self._locks_lock:
+                lock = self._project_locks.get(project_id)
+                if lock is None:
+                    lock = threading.Lock()
+                    self._project_locks[project_id] = lock
+        return lock
+
+    def _cleanup_project_lock(self, project_id: str) -> None:
+        """清理已删除项目的锁，防止内存泄漏.
+
+        Args:
+            project_id: 被删除的项目ID
+        """
+        with self._locks_lock:
+            self._project_locks.pop(project_id, None)
+
     def _load_metadata(self) -> Dict[str, Any]:
         """加载元数据文件."""
         if self.metadata_path.exists():
@@ -248,104 +279,145 @@ class ProjectStorage:
                     pass
             return False
 
+    def _migrate_to_version_control(self, project_id: str, project_data: Dict[str, Any]) -> bool:
+        """迁移项目数据到版本控制结构.
+
+        为所有现有条目添加 version 字段（初始值为 1）。
+
+        Args:
+            project_id: 项目ID
+            project_data: 项目数据字典（直接修改）
+
+        Returns:
+            是否需要保存（是否有数据被迁移）
+        """
+        need_save = False
+        default_groups = ["features", "fixes", "notes", "standards"]
+
+        for group_name in default_groups:
+            for item in project_data.get(group_name, []):
+                if "version" not in item:
+                    item["version"] = 1
+                    need_save = True
+
+        return need_save
+
     def _load_project(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """加载单个项目数据（带向后兼容和缓存）."""
-        # 1. 先尝试从缓存获取
+        """加载单个项目数据（带向后兼容和缓存，使用双重检查锁定优化性能）."""
+        # 第一次检查：无锁读取缓存（快速路径）
         cached_data = self._project_data_cache.get(project_id)
         if cached_data is not None:
             return cached_data
 
-        # 2. 缓存未命中，从磁盘加载
-        # 优先尝试新格式（目录结构）
-        new_json_path = self._get_project_json_path(project_id)
-        old_path = self._get_project_path(project_id)
+        # 缓存未命中，获取锁准备加载
+        lock = self._get_project_lock(project_id)
+        with lock:
+            # 第二次检查：其他线程可能已加载，再次检查缓存
+            cached_data = self._project_data_cache.get(project_id)
+            if cached_data is not None:
+                return cached_data
 
-        project_path = None
-        if new_json_path.exists():
-            # 新格式存在，直接使用
-            project_path = new_json_path
-        elif old_path.exists():
-            # 旧格式存在，先迁移再加载
-            if self._migrate_project_storage(project_id):
+            # 从磁盘加载
+            # 优先尝试新格式（目录结构）
+            new_json_path = self._get_project_json_path(project_id)
+            old_path = self._get_project_path(project_id)
+
+            project_path = None
+            if new_json_path.exists():
+                # 新格式存在，直接使用
                 project_path = new_json_path
-            else:
-                project_path = old_path
+            elif old_path.exists():
+                # 旧格式存在，先迁移再加载
+                if self._migrate_project_storage(project_id):
+                    project_path = new_json_path
+                else:
+                    project_path = old_path
 
-        if project_path and project_path.exists():
-            try:
-                with open(project_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                if project_path and project_path.exists():
+                    try:
+                        with open(project_path, "r", encoding="utf-8") as f:
+                            data = json.load(f)
 
-                # 向后兼容：为没有description字段的笔记添加空description
-                for note in data.get("notes", []):
-                    if "summary" not in note:
-                        note["summary"] = ""
+                        # 向后兼容：为没有description字段的笔记添加空description
+                        for note in data.get("notes", []):
+                            if "summary" not in note:
+                                note["summary"] = ""
 
-                # 兼容旧格式：将内联 content 迁移到独立文件
-                from business.core.groups import CONTENT_SEPARATE_GROUPS
-                need_save = False
-                for group_name in CONTENT_SEPARATE_GROUPS:
-                    for item in data.get(group_name, []):
-                        if "content" in item and item["content"]:
-                            self._save_item_content(project_id, group_name, item["id"], item["content"])
-                            del item["content"]
-                            need_save = True
-                if need_save:
-                    project_json_path = self._get_project_json_path(project_id)
-                    with open(project_json_path, "w", encoding="utf-8") as f:
-                        json.dump(data, f, ensure_ascii=False, indent=2)
+                        # 兼容旧格式：将内联 content 迁移到独立文件
+                        from business.core.groups import CONTENT_SEPARATE_GROUPS
+                        need_save = False
+                        for group_name in CONTENT_SEPARATE_GROUPS:
+                            for item in data.get(group_name, []):
+                                if "content" in item and item["content"]:
+                                    self._save_item_content(project_id, group_name, item["id"], item["content"])
+                                    del item["content"]
+                                    need_save = True
+                        if need_save:
+                            project_json_path = self._get_project_json_path(project_id)
+                            with open(project_json_path, "w", encoding="utf-8") as f:
+                                json.dump(data, f, ensure_ascii=False, indent=2)
 
-                # 向后兼容：为没有tag_registry的项目添加空注册表
-                if "tag_registry" not in data:
-                    data["tag_registry"] = {}
+                        # 向后兼容：为没有tag_registry的项目添加空注册表
+                        if "tag_registry" not in data:
+                            data["tag_registry"] = {}
 
-                # 向后兼容：为没有 fixes 分组的项目添加空修复列表
-                if "fixes" not in data:
-                    data["fixes"] = []
+                        # 向后兼容：为没有 fixes 分组的项目添加空修复列表
+                        if "fixes" not in data:
+                            data["fixes"] = []
 
-                # 3. 存入缓存 - TTLCache 使用字典接口
-                self._project_data_cache[project_id] = data
+                        # 版本控制迁移：为没有 version 字段的条目添加初始版本
+                        if self._migrate_to_version_control(project_id, data):
+                            # 保存迁移后的数据
+                            project_json_path = self._get_project_json_path(project_id)
+                            with open(project_json_path, "w", encoding="utf-8") as f:
+                                json.dump(data, f, ensure_ascii=False, indent=2)
 
-                return data
-            except (json.JSONDecodeError, IOError):
-                return None
-        return None
+                        # 存入缓存 - TTLCache 使用字典接口
+                        self._project_data_cache[project_id] = data
+
+                        return data
+                    except (json.JSONDecodeError, IOError):
+                        return None
+            return None
 
     def _save_project(self, project_id: str, project_data: Dict[str, Any]) -> bool:
-        """保存单个项目数据（使用 write-through 缓存策略）.
+        """保存单个项目数据（使用 write-through 缓存策略，双重检查锁定优化）.
 
         注意：所有默认组的 content 字段不写入 JSON，而是单独保存为 .md 文件
         """
-        try:
-            # 确保项目目录存在
-            project_dir = self._get_project_dir(project_id)
-            project_dir.mkdir(parents=True, exist_ok=True)
+        lock = self._get_project_lock(project_id)
+        with lock:
+            try:
+                # 确保项目目录存在
+                project_dir = self._get_project_dir(project_id)
+                project_dir.mkdir(parents=True, exist_ok=True)
 
-            # 确保所有默认组的 content 目录存在
-            from business.core.groups import CONTENT_SEPARATE_GROUPS
-            for group_name in CONTENT_SEPARATE_GROUPS:
-                self._get_group_content_dir(project_id, group_name)
+                # 确保所有默认组的 content 目录存在
+                from business.core.groups import CONTENT_SEPARATE_GROUPS
+                for group_name in CONTENT_SEPARATE_GROUPS:
+                    self._get_group_content_dir(project_id, group_name)
 
-            # 复制数据，移除所有默认组中的 content 字段
-            save_data = project_data.copy()
-            for group_name in CONTENT_SEPARATE_GROUPS:
-                if group_name in save_data:
-                    save_data[group_name] = [
-                        {k: v for k, v in item.items() if k != "content"}
-                        for item in save_data[group_name]
-                    ]
+                # 复制数据，移除所有默认组中的 content 字段
+                save_data = project_data.copy()
+                for group_name in CONTENT_SEPARATE_GROUPS:
+                    if group_name in save_data:
+                        save_data[group_name] = [
+                            {k: v for k, v in item.items() if k != "content"}
+                            for item in save_data[group_name]
+                        ]
 
-            # 保存 project.json
-            project_json_path = self._get_project_json_path(project_id)
-            with open(project_json_path, "w", encoding="utf-8") as f:
-                json.dump(save_data, f, ensure_ascii=False, indent=2)
+                # 保存 project.json
+                project_json_path = self._get_project_json_path(project_id)
+                with open(project_json_path, "w", encoding="utf-8") as f:
+                    json.dump(save_data, f, ensure_ascii=False, indent=2)
 
-            # 更新缓存 (write-through) - TTLCache 使用字典接口
-            self._project_data_cache[project_id] = project_data
+                # 更新缓存 (write-through) - TTLCache 使用字典接口
+                # 注意：此处已在锁内，无需双重检查
+                self._project_data_cache[project_id] = project_data
 
-            return True
-        except IOError:
-            return False
+                return True
+            except IOError:
+                return False
 
     # ==================== 组配置存储 ====================
 
@@ -860,6 +932,114 @@ class ProjectStorage:
 
         # 新 ID = 最大序号 + 1（不格式化，支持任意数量）
         return f"{prefix}_{date_str}_{max_counter + 1}"
+
+    def update_item_with_version_check(
+        self,
+        project_id: str,
+        group: str,
+        item_id: str,
+        expected_version: Optional[int],
+        updates: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """原子性地更新条目（带版本检查的 CAS 操作）.
+
+        这是一个原子操作，等效于：
+        1. 获取项目级锁
+        2. 重新加载最新的项目数据
+        3. 检查条目版本是否匹配
+        4. 如果匹配，更新数据并递增版本
+        5. 如果不匹配，返回冲突
+
+        Args:
+            project_id: 项目ID
+            group: 分组名称
+            item_id: 条目ID
+            expected_version: 期望的版本号（None表示不检查）
+            updates: 要更新的字段字典
+
+        Returns:
+            操作结果 {"success": bool, "version": int, ...}
+        """
+        lock = self._get_project_lock(project_id)
+        with lock:
+            # 1. 重新加载最新数据（确保是最新的）
+            # 直接从缓存获取或从磁盘加载（当前已在锁保护下，不需要再次获取锁）
+            project_data = self._project_data_cache.get(project_id)
+            if project_data is None:
+                # 缓存未命中，需要从磁盘加载
+                # 不调用 _load_project（它会再次获取锁），直接加载
+                new_json_path = self._get_project_json_path(project_id)
+                old_path = self._get_project_path(project_id)
+
+                project_path = None
+                if new_json_path.exists():
+                    project_path = new_json_path
+                elif old_path.exists():
+                    # 旧格式存在，先迁移再加载
+                    if self._migrate_project_storage(project_id):
+                        project_path = new_json_path
+                    else:
+                        project_path = old_path
+
+                if project_path and project_path.exists():
+                    try:
+                        with open(project_path, "r", encoding="utf-8") as f:
+                            project_data = json.load(f)
+
+                        # 存入缓存
+                        self._project_data_cache[project_id] = project_data
+                    except (json.JSONDecodeError, IOError):
+                        return {"success": False, "error": "项目加载失败"}
+
+            if project_data is None:
+                return {"success": False, "error": "项目不存在"}
+
+            items = project_data.get(group, [])
+            item_index = None
+            for i, item in enumerate(items):
+                if item.get("id") == item_id:
+                    item_index = i
+                    break
+
+            if item_index is None:
+                return {"success": False, "error": "条目不存在"}
+
+            item = items[item_index]
+
+            # 保存旧条目数据（在更新前复制）
+            old_item = item.copy()
+
+            # 2. 原子性地检查版本
+            current_version = item.get("version", 1)
+            if expected_version is not None and current_version != expected_version:
+                return {
+                    "success": False,
+                    "error": "version_conflict",
+                    "message": f"版本冲突",
+                    "current_version": current_version,
+                    "expected_version": expected_version
+                }
+
+            # 3. 更新数据
+            for key, value in updates.items():
+                if key != "id":  # 不允许修改ID
+                    item[key] = value
+
+            # 4. 递增版本号
+            item["version"] = current_version + 1
+            new_version = item["version"]
+
+            # 5. 保存
+            if self._save_project(project_id, project_data):
+                # 返回新条目和旧条目数据
+                return {
+                    "success": True,
+                    "version": new_version,
+                    "item": item,
+                    "old_item": old_item  # 返回更新前的条目
+                }
+            else:
+                return {"success": False, "error": "保存失败"}
 
     # ==================== 缓存访问方法（供子类使用）====================
 

@@ -65,6 +65,9 @@ class Item:
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
+    # 版本控制（用于乐观锁并发控制）
+    version: Optional[int] = None  # 条目版本号，用于乐观锁并发控制
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典，仅包含非空字段（用于存储）"""
         result: Dict[str, Any] = {
@@ -95,6 +98,9 @@ class Item:
         if self.updated_at:
             result["updated_at"] = self.updated_at
 
+        if self.version is not None:
+            result["version"] = self.version
+
         return result
 
     @classmethod
@@ -112,5 +118,6 @@ class Item:
             severity=data.get("severity"),
             related=related,
             created_at=data.get("created_at"),
-            updated_at=data.get("updated_at")
+            updated_at=data.get("updated_at"),
+            version=data.get("version")
         )

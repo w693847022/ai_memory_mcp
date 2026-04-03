@@ -426,7 +426,8 @@ async def project_update(
     status: str = Body(None),
     severity: str = Body(None),
     related: str = Body(None),
-    tags: str = Body(None)
+    tags: str = Body(None),
+    version: Optional[int] = Body(None)
 ):
     """更新项目条目."""
     group_configs = _storage.get_group_configs(project_id)
@@ -447,11 +448,22 @@ async def project_update(
         project_id=project_id, group=group, item_id=item_id,
         content=content, summary=summary, status=status,
         severity=severity, related=related_dict,
-        tags=parse_tags(tags) if tags else None
+        tags=parse_tags(tags) if tags else None,
+        expected_version=version
     )
 
     if result["success"]:
-        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["item"]}, message=f"条目 '{item_id}' 已更新").to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["item"], "version": result.get("version")}, message=f"条目 '{item_id}' 已更新").to_dict()
+
+    # 处理版本冲突
+    if result.get("error") == "version_conflict":
+        raise HTTPException(status_code=409, detail={
+            "error": "version_conflict",
+            "message": result.get("message"),
+            "current_version": result.get("current_version"),
+            "expected_version": result.get("expected_version")
+        })
+
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 

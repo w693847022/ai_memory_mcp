@@ -257,7 +257,8 @@ class BusinessApiClient:
         status: Optional[str] = None,
         severity: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]]]] = None,
-        tags: Optional[str] = None
+        tags: Optional[str] = None,
+        version: Optional[int] = None
     ) -> ApiResponse:
         """更新项目条目."""
         import json
@@ -268,7 +269,8 @@ class BusinessApiClient:
             "status": status,
             "severity": severity,
             "related": json.dumps(related) if isinstance(related, dict) else related,
-            "tags": tags
+            "tags": tags,
+            "version": version
         }
         # 移除 None 值
         data = {k: v for k, v in data.items() if v is not None}
