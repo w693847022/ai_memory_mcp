@@ -1,6 +1,6 @@
 ---
 name: do-feature
-description: feature 简短功能开发 - 简化流程: 需求澄清->方案选择->代码修改
+description: feature 简短功能开发
 allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_get, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, Read, Grep, Glob, Bash, Skill
 argument-hint: <功能描述>
 ---
@@ -26,7 +26,7 @@ argument-hint: <功能描述>
 ## 流程概览
 
 ```
-阶段1(项目确认) → 阶段2(需求澄清) → 阶段3(方案设计) → 阶段4(代码实现)
+阶段1(项目确认) → 阶段2(方案设计) → 阶段3(代码实现)
 ```
 
 ---
@@ -50,26 +50,7 @@ argument-hint: <功能描述>
 
 ---
 
-## 阶段 2: 需求澄清与确认
-
-**使用技能**: `requirement-confirmation`
-
-```
-Skill: requirement-confirmation, args: "<feature_id>"
-```
-
-**技能会完成**:
-1. 需求澄清（多轮提问）
-2. 需求确认
-3. 创建note记录完整需求
-4. 更新development-log
-
-**输出**:
-- `confirmed_requirements`: 确认的需求
-
----
-
-## 阶段 3: 方案设计与选择
+## 阶段 2: 方案设计与选择
 
 **使用技能**: `solution-design`
 
@@ -89,7 +70,7 @@ Skill: solution-design, args: "<feature_id>"
 
 ---
 
-## 阶段 4: 代码实现与测试
+## 阶段 3: 代码实现与测试
 
 **使用技能**: `code-implementation`
 
@@ -117,7 +98,6 @@ feature:
   - feature:content
 
 note:
-  - note_id:summary (requirements)
   - note_id:summary (implementation-plan)
   - note_id:summary (development-log)
 ```
