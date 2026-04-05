@@ -1,11 +1,11 @@
-"""Business API HTTP 客户端.
+"""Business API 异步 HTTP 客户端.
 
-供 MCP Server 和 REST API Server 调用 business 层 HTTP 服务。
+供 FastAPI Server 等异步场景调用 business 层 HTTP 服务。
 """
 
 import os
-import httpx
 from typing import Optional, Dict, List, Union, Any
+import httpx
 from common.response import ApiResponse
 from .pool_config import ConnectionPoolConfig
 
@@ -15,8 +15,8 @@ def _get_business_api_url() -> str:
     return os.environ.get("BUSINESS_API_URL", "http://localhost:8002")
 
 
-class BusinessApiClient:
-    """Business API HTTP 客户端."""
+class BusinessApiAsyncClient:
+    """Business API 异步 HTTP 客户端."""
 
     def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
         """初始化客户端.
@@ -30,27 +30,35 @@ class BusinessApiClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._pool_config = ConnectionPoolConfig.from_env(timeout)
-        self._client: Optional[httpx.Client] = None
+        self._client: Optional[httpx.AsyncClient] = None
 
     @property
-    def client(self) -> httpx.Client:
-        """获取或创建 HTTP 客户端."""
+    def client(self) -> httpx.AsyncClient:
+        """获取或创建异步 HTTP 客户端."""
         if self._client is None:
-            self._client = httpx.Client(
+            self._client = httpx.AsyncClient(
                 limits=self._pool_config.to_limits(),
                 http2=self._pool_config.http2,
                 timeout=self.timeout,
             )
         return self._client
 
-    def close(self):
-        """关闭 HTTP 客户端."""
+    async def close(self):
+        """关闭异步 HTTP 客户端."""
         if self._client:
-            self._client.close()
+            await self._client.aclose()
             self._client = None
 
-    def _request(self, method: str, path: str, **kwargs) -> ApiResponse:
-        """发送 HTTP 请求.
+    async def __aenter__(self):
+        """异步上下文管理器入口."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口."""
+        await self.close()
+
+    async def _request(self, method: str, path: str, **kwargs) -> ApiResponse:
+        """发送异步 HTTP 请求.
 
         Args:
             method: HTTP 方法
@@ -62,17 +70,15 @@ class BusinessApiClient:
         """
         url = f"{self.base_url}{path}"
         try:
-            response = self.client.request(method, url, **kwargs)
+            response = await self.client.request(method, url, **kwargs)
             response.raise_for_status()
             result = response.json()
             return ApiResponse.from_dict(result)
         except httpx.HTTPStatusError as e:
-            # 尝试解析响应体中的详细错误信息
             try:
                 error_detail = e.response.json()
                 if isinstance(error_detail, dict) and "detail" in error_detail:
                     detail = error_detail["detail"]
-                    # 如果是列表（FastAPI 验证错误），提取有用的信息
                     if isinstance(detail, list):
                         errors = []
                         for item in detail:
@@ -94,27 +100,27 @@ class BusinessApiClient:
         except Exception as e:
             return ApiResponse(success=False, error=f"请求失败: {str(e)}")
 
-    def _get(self, path: str, **kwargs) -> ApiResponse:
-        """发送 GET 请求."""
-        return self._request("GET", path, **kwargs)
+    async def _get(self, path: str, **kwargs) -> ApiResponse:
+        """发送异步 GET 请求."""
+        return await self._request("GET", path, **kwargs)
 
-    def _post(self, path: str, **kwargs) -> ApiResponse:
-        """发送 POST 请求."""
-        return self._request("POST", path, **kwargs)
+    async def _post(self, path: str, **kwargs) -> ApiResponse:
+        """发送异步 POST 请求."""
+        return await self._request("POST", path, **kwargs)
 
-    def _put(self, path: str, **kwargs) -> ApiResponse:
-        """发送 PUT 请求."""
-        return self._request("PUT", path, **kwargs)
+    async def _put(self, path: str, **kwargs) -> ApiResponse:
+        """发送异步 PUT 请求."""
+        return await self._request("PUT", path, **kwargs)
 
-    def _delete(self, path: str, **kwargs) -> ApiResponse:
-        """发送 DELETE 请求."""
-        return self._request("DELETE", path, **kwargs)
+    async def _delete(self, path: str, **kwargs) -> ApiResponse:
+        """发送异步 DELETE 请求."""
+        return await self._request("DELETE", path, **kwargs)
 
     # ===================
     # Project APIs
     # ===================
 
-    def project_list(
+    async def project_list(
         self,
         view_mode: str = "summary",
         page: int = 1,
@@ -130,9 +136,9 @@ class BusinessApiClient:
             "name_pattern": name_pattern,
             "include_archived": include_archived
         }
-        return self._get("/api/projects", params=params)
+        return await self._get("/api/projects", params=params)
 
-    def register_project(
+    async def register_project(
         self,
         name: str,
         path: str = "",
@@ -141,25 +147,25 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """注册新项目."""
         params = {"name": name, "path": path, "summary": summary, "tags": tags}
-        return self._post("/api/projects", params=params)
+        return await self._post("/api/projects", params=params)
 
-    def get_project(self, project_id: str) -> ApiResponse:
+    async def get_project(self, project_id: str) -> ApiResponse:
         """获取项目详情."""
-        return self._get(f"/api/projects/{project_id}")
+        return await self._get(f"/api/projects/{project_id}")
 
-    def rename_project(self, project_id: str, new_name: str) -> ApiResponse:
+    async def rename_project(self, project_id: str, new_name: str) -> ApiResponse:
         """重命名项目."""
-        return self._put(f"/api/projects/{project_id}/rename", params={"new_name": new_name})
+        return await self._put(f"/api/projects/{project_id}/rename", params={"new_name": new_name})
 
-    def remove_project(self, project_id: str, mode: str = "archive") -> ApiResponse:
+    async def remove_project(self, project_id: str, mode: str = "archive") -> ApiResponse:
         """删除或归档项目."""
-        return self._delete(f"/api/projects/{project_id}", params={"mode": mode})
+        return await self._delete(f"/api/projects/{project_id}", params={"mode": mode})
 
-    def list_groups(self, project_id: str) -> ApiResponse:
+    async def list_groups(self, project_id: str) -> ApiResponse:
         """列出项目的所有分组."""
-        return self._get(f"/api/projects/{project_id}/groups")
+        return await self._get(f"/api/projects/{project_id}/groups")
 
-    def project_tags_info(
+    async def project_tags_info(
         self,
         project_id: str,
         group_name: str = "",
@@ -182,9 +188,9 @@ class BusinessApiClient:
             "summary_pattern": summary_pattern,
             "tag_name_pattern": tag_name_pattern
         }
-        return self._get(f"/api/projects/{project_id}/tags", params=params)
+        return await self._get(f"/api/projects/{project_id}/tags", params=params)
 
-    def project_get(
+    async def project_get(
         self,
         project_id: str,
         group_name: str = "",
@@ -217,9 +223,9 @@ class BusinessApiClient:
             "updated_after": updated_after,
             "updated_before": updated_before
         }
-        return self._get(f"/api/projects/{project_id}/items", params=params)
+        return await self._get(f"/api/projects/{project_id}/items", params=params)
 
-    def project_add(
+    async def project_add(
         self,
         project_id: str,
         group: str,
@@ -231,7 +237,6 @@ class BusinessApiClient:
         tags: str = ""
     ) -> ApiResponse:
         """添加项目条目."""
-        # group 作为查询参数，其他作为 JSON 请求体
         data = {
             "content": content,
             "summary": summary,
@@ -240,11 +245,10 @@ class BusinessApiClient:
             "related": related,
             "tags": tags
         }
-        # 移除 None 值
         data = {k: v for k, v in data.items() if v is not None}
-        return self._post(f"/api/projects/{project_id}/items", params={"group": group}, json=data)
+        return await self._post(f"/api/projects/{project_id}/items", params={"group": group}, json=data)
 
-    def project_update(
+    async def project_update(
         self,
         project_id: str,
         group: str,
@@ -259,7 +263,6 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """更新项目条目."""
         import json
-        # group 作为查询参数，其他作为 JSON 请求体
         data = {
             "content": content,
             "summary": summary,
@@ -269,16 +272,15 @@ class BusinessApiClient:
             "tags": tags,
             "version": version
         }
-        # 移除 None 值
         data = {k: v for k, v in data.items() if v is not None}
-        return self._put(f"/api/projects/{project_id}/items/{item_id}", params={"group": group}, json=data)
+        return await self._put(f"/api/projects/{project_id}/items/{item_id}", params={"group": group}, json=data)
 
-    def project_delete(self, project_id: str, group: str, item_id: str) -> ApiResponse:
+    async def project_delete(self, project_id: str, group: str, item_id: str) -> ApiResponse:
         """删除项目条目."""
         params = {"group": group}
-        return self._delete(f"/api/projects/{project_id}/items/{item_id}", params=params)
+        return await self._delete(f"/api/projects/{project_id}/items/{item_id}", params=params)
 
-    def manage_item_tags(
+    async def manage_item_tags(
         self,
         project_id: str,
         group_name: str,
@@ -295,13 +297,13 @@ class BusinessApiClient:
             "tag": tag,
             "tags": tags
         }
-        return self._post(f"/api/projects/{project_id}/items/{item_id}/tags", params=params)
+        return await self._post(f"/api/projects/{project_id}/items/{item_id}/tags", params=params)
 
     # ===================
     # Tag APIs
     # ===================
 
-    def tag_register(
+    async def tag_register(
         self,
         project_id: str,
         tag_name: str,
@@ -310,9 +312,9 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """注册项目标签."""
         params = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
-        return self._post("/api/tags/register", params=params)
+        return await self._post("/api/tags/register", params=params)
 
-    def tag_update(
+    async def tag_update(
         self,
         project_id: str,
         tag_name: str,
@@ -323,9 +325,9 @@ class BusinessApiClient:
         params = {k: v for k, v in params.items() if v is not None}
         if summary is not None:
             params["summary"] = summary
-        return self._put("/api/tags/update", params=params)
+        return await self._put("/api/tags/update", params=params)
 
-    def tag_delete(
+    async def tag_delete(
         self,
         project_id: str,
         tag_name: str,
@@ -333,9 +335,9 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """删除标签注册."""
         data = {"project_id": project_id, "tag_name": tag_name, "force": force}
-        return self._delete("/api/tags/delete", params=data)
+        return await self._delete("/api/tags/delete", params=data)
 
-    def tag_merge(
+    async def tag_merge(
         self,
         project_id: str,
         old_tag: str,
@@ -343,17 +345,17 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """合并标签."""
         params = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
-        return self._post("/api/tags/merge", params=params)
+        return await self._post("/api/tags/merge", params=params)
 
     # ===================
     # Stats APIs
     # ===================
 
-    def project_stats(self) -> ApiResponse:
+    async def project_stats(self) -> ApiResponse:
         """获取全局统计信息."""
-        return self._get("/api/stats")
+        return await self._get("/api/stats")
 
-    def stats_summary(
+    async def stats_summary(
         self,
         type: str = "",
         tool_name: str = "",
@@ -362,17 +364,17 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """获取统计摘要."""
         params = {"type": type, "tool_name": tool_name, "project_id": project_id, "date": date}
-        return self._get("/api/stats/summary", params=params)
+        return await self._get("/api/stats/summary", params=params)
 
-    def stats_cleanup(self, retention_days: int = 30) -> ApiResponse:
+    async def stats_cleanup(self, retention_days: int = 30) -> ApiResponse:
         """清理过期统计数据."""
-        return self._delete("/api/stats/cleanup", params={"retention_days": retention_days})
+        return await self._delete("/api/stats/cleanup", params={"retention_days": retention_days})
 
     # ===================
     # Group APIs
     # ===================
 
-    def create_custom_group(
+    async def create_custom_group(
         self,
         project_id: str,
         group_name: str,
@@ -394,9 +396,9 @@ class BusinessApiClient:
             "enable_status": enable_status,
             "enable_severity": enable_severity
         }
-        return self._post("/api/groups/custom", params=params)
+        return await self._post("/api/groups/custom", params=params)
 
-    def update_group(
+    async def update_group(
         self,
         project_id: str,
         group_name: str,
@@ -414,42 +416,42 @@ class BusinessApiClient:
                      ("enable_status", enable_status), ("enable_severity", enable_severity)]:
             if v is not None:
                 params[k] = v
-        return self._put("/api/groups/custom", params=params)
+        return await self._put("/api/groups/custom", params=params)
 
-    def delete_custom_group(self, project_id: str, group_name: str) -> ApiResponse:
+    async def delete_custom_group(self, project_id: str, group_name: str) -> ApiResponse:
         """删除自定义组."""
         params = {"project_id": project_id, "group_name": group_name}
-        return self._delete("/api/groups/custom", params=params)
+        return await self._delete("/api/groups/custom", params=params)
 
-    def get_group_settings(self, project_id: str) -> ApiResponse:
+    async def get_group_settings(self, project_id: str) -> ApiResponse:
         """获取组设置."""
-        return self._get("/api/groups/settings", params={"project_id": project_id})
+        return await self._get("/api/groups/settings", params={"project_id": project_id})
 
-    def update_group_settings(
+    async def update_group_settings(
         self,
         project_id: str,
         default_related_rules: Optional[Dict] = None
     ) -> ApiResponse:
         """更新组设置."""
         params = {"project_id": project_id, "default_related_rules": default_related_rules}
-        return self._put("/api/groups/settings", params=params)
+        return await self._put("/api/groups/settings", params=params)
 
 
-# 全局客户端实例
-_client: Optional[BusinessApiClient] = None
+# 全局异步客户端实例
+_async_client: Optional[BusinessApiAsyncClient] = None
 
 
-def get_business_client() -> BusinessApiClient:
-    """获取全局 Business API 客户端实例."""
-    global _client
-    if _client is None:
-        _client = BusinessApiClient()
-    return _client
+async def get_business_async_client() -> BusinessApiAsyncClient:
+    """获取全局 Business API 异步客户端实例."""
+    global _async_client
+    if _async_client is None:
+        _async_client = BusinessApiAsyncClient()
+    return _async_client
 
 
-def close_business_client():
-    """关闭全局 Business API 客户端."""
-    global _client
-    if _client:
-        _client.close()
-        _client = None
+async def close_business_async_client():
+    """关闭全局 Business API 异步客户端."""
+    global _async_client
+    if _async_client:
+        await _async_client.close()
+        _async_client = None
