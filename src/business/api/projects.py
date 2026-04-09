@@ -8,6 +8,7 @@ from business.core.groups import (
     is_group_with_status,
     UnifiedGroupConfig,
     CONTENT_SEPARATE_GROUPS,
+    DEFAULT_GROUP_CONFIGS,
 )
 from business.core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode, parse_tags, validate_date, filter_tags_by_regex
 from business.models.response import ApiResponse
@@ -395,11 +396,15 @@ async def project_add(
     """添加项目条目."""
     tag_list = parse_tags(tags)
     group_configs = await _storage.get_group_configs(project_id)
-    all_groups_raw = group_configs.get("groups", {})
-    all_groups = {
-        name: UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
-        for name, cfg in all_groups_raw.items()
-    }
+    # 构建完整的组配置：内置组 + 自定义组（用户修改的内置组配置会覆盖默认值）
+    all_groups = {}
+    # 先加载默认内置组配置
+    for name, cfg in DEFAULT_GROUP_CONFIGS.items():
+        all_groups[name] = UnifiedGroupConfig.from_dict(cfg)
+    # 再用存储的配置覆盖（包含自定义组和用户修改的内置组）
+    custom_groups_raw = group_configs.get("groups", {})
+    for name, cfg in custom_groups_raw.items():
+        all_groups[name] = UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
     default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
 
     v = _project_service.validate_add_item(group, content, summary, status, severity, related, tag_list, all_groups, default_rules)
@@ -455,11 +460,15 @@ async def project_update(
 ):
     """更新项目条目."""
     group_configs = await _storage.get_group_configs(project_id)
-    all_groups_raw = group_configs.get("groups", {})
-    all_groups = {
-        name: UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
-        for name, cfg in all_groups_raw.items()
-    }
+    # 构建完整的组配置：内置组 + 自定义组（用户修改的内置组配置会覆盖默认值）
+    all_groups = {}
+    # 先加载默认内置组配置
+    for name, cfg in DEFAULT_GROUP_CONFIGS.items():
+        all_groups[name] = UnifiedGroupConfig.from_dict(cfg)
+    # 再用存储的配置覆盖（包含自定义组和用户修改的内置组）
+    custom_groups_raw = group_configs.get("groups", {})
+    for name, cfg in custom_groups_raw.items():
+        all_groups[name] = UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
     default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
 
     v = _project_service.validate_update_item(group, item_id, content, summary, related, all_groups, default_rules)

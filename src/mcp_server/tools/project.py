@@ -153,7 +153,7 @@ def project_list(
 
 
 def project_groups_list(project_id: str) -> str:
-    """列出项目的所有分组（内置组 + 自定义组）.
+    """列出项目的所有分组（内置组 + 自定义组）及其配置.
 
     Args:
         project_id: 项目ID (必填)
@@ -161,7 +161,19 @@ def project_groups_list(project_id: str) -> str:
             - 格式: UUID 字符串
 
     Returns:
-        JSON 格式的分组列表及完整配置（包含全局 settings）
+        JSON 格式的分组列表，每个分组包含：
+        - name: 分组名称
+        - count: 该分组下的条目数量
+        - is_builtin: 是否为内置分组
+        - content_max_bytes: 内容最大字节数
+        - summary_max_bytes: 摘要最大字节数
+        - allow_related: 是否允许关联其他分组
+        - allowed_related_to: 允许关联的分组列表
+        - enable_status: 是否启用状态字段
+        - enable_severity: 是否启用严重程度字段
+        - status_values: 支持的状态值列表
+        - severity_values: 支持的严重程度值列表
+        - required_fields: 必填字段列表
     """
     client = _get_client()
     # list_groups 现在返回完整配置 + settings
@@ -248,26 +260,26 @@ def project_add(
         group: 分组类型 (必填)
             - 内置: features, fixes, notes, standards
             - 自定义: 通过 create_custom_group() 创建的分组名
-            - 获取方式: project_groups_list(project_id)
-        content: 补充描述 (可选)
+            - 获取方式: project_groups_list(project_id) 返回的 groups 列表
+        content: 补充描述 (必填)
             - 格式: Markdown 格式文本
-            - 限制: 最长 4000 字节
+            - 限制: 通过 project_groups_list(project_id) 获取对应分组的 content_max_bytes
             - 默认: 空
         summary: 摘要 (必填)
             - 格式: 简短描述
-            - 限制: 最长 90 字节
-        status: 状态 (可选)
-            - features/fixes 支持: pending, in_progress, completed
-            - 其他分组: 不支持
-            - 默认: pending
-        severity: 严重程度 (可选)
-            - 仅 fixes 支持: critical, high, medium, low
-            - 默认: "medium"
+            - 限制: 通过 project_groups_list(project_id) 获取对应分组的 summary_max_bytes
+        status: 状态 (条件必填)
+            - 是否必填: 通过 project_groups_list(project_id) 获取对应分组的 enable_status 和 required_fields
+            - 可选值: 通过 project_groups_list(project_id) 获取对应分组的 status_values
+            - 示例: features/fixes 分组支持 pending, in_progress, completed
+        severity: 严重程度 (条件必填)
+            - 是否必填: 通过 project_groups_list(project_id) 获取对应分组的 enable_severity 和 required_fields
+            - 可选值: 通过 project_groups_list(project_id) 获取对应分组的 severity_values
+            - 示例: fixes 分组支持 critical, high, medium, low
         related: 关联条目 (可选)
-            - 格式: JSON 字符串
-            - 示例: '{"features": ["feat_20260403_2"]}'
-            - 限制: features→notes, fixes→features+notes, standards→notes
-            - 默认: 空
+            - 格式: JSON 字符串，示例: '{"features": ["feat_20260403_2"]}'
+            - 是否允许: 通过 project_groups_list(project_id) 获取对应分组的 allow_related
+            - 可关联组: 通过 project_groups_list(project_id) 获取对应分组的 allowed_related_to
         tags: 标签列表 (可选)
             - 格式: 逗号分隔 (如: "feature,api,enhancement")
             - 默认: 空
@@ -307,30 +319,32 @@ def project_update(
         project_id: 项目ID (必填)
             - 获取方式: project_list() 返回结果中的 "id" 字段
         group: 分组类型 (必填)
-            - 允许值: features, fixes, notes, standards 或自定义分组名
+            - 允许值: 通过 project_groups_list(project_id) 获取所有可用分组
         item_id: 条目ID (必填)
             - 格式: {group}_{timestamp}_{sequence} (如: "feat_20260403_2")
             - 获取方式: project_get(project_id, group_name) 返回结果中的 "id" 字段
         content: 内容更新 (可选)
-            - 传入 None 表示不更新
-            - 传入空字符串 "" 表示清空
+            - 传入 None 表示不更新，传入空字符串 "" 表示清空
+            - 长度限制: 通过 project_groups_list(project_id) 获取对应分组的 content_max_bytes
         summary: 摘要更新 (可选)
             - 传入 None 表示不更新
+            - 长度限制: 通过 project_groups_list(project_id) 获取对应分组的 summary_max_bytes
         status: 状态更新 (可选)
-            - 允许值: pending, in_progress, completed
             - 传入 None 表示不更新
+            - 可选值: 通过 project_groups_list(project_id) 获取对应分组的 status_values
+            - 注意: 只有 enable_status=true 的分组才支持此字段
         severity: 严重程度更新 (可选)
-            - 允许值: critical, high, medium, low
-            - 仅 fixes 分组有效
             - 传入 None 表示不更新
+            - 可选值: 通过 project_groups_list(project_id) 获取对应分组的 severity_values
+            - 注意: 只有 enable_severity=true 的分组才支持此字段
         related: 关联条目更新 (可选)
-            - 格式: JSON 字符串或字典
-            - 示例: {"notes": ["note_20260323_5"]} 或 '{"notes": ["note_20260323_5"]}'
+            - 格式: JSON 字符串或字典，示例: {"notes": ["note_20260323_5"]} 或 '{"notes": ["note_20260323_5"]}'
             - None=不更新, {}=清空关联
+            - 可关联组: 通过 project_groups_list(project_id) 获取对应分组的 allowed_related_to
+            - 注意: 只有 allow_related=true 的分组才支持此字段
         tags: 标签更新 (可选)
             - 格式: 逗号分隔的字符串
-            - 传入 None 表示不更新
-            - 传入空字符串 "" 表示清空标签
+            - 传入 None 表示不更新，传入空字符串 "" 表示清空标签
         version: 版本号 (可选)
             - 用途: 乐观锁并发控制
             - 获取方式: project_get() 返回结果中的 "version" 字段
