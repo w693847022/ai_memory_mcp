@@ -14,6 +14,7 @@ from business.core.groups import (
     get_group_config, validate_related,
     UnifiedGroupConfig,
     CONTENT_SEPARATE_GROUPS,
+    DEFAULT_GROUP_CONFIGS,
 )
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
@@ -753,40 +754,126 @@ class ProjectService:
     # ==================== 分组管理 ====================
 
     async def list_groups(self, project_id: str) -> Dict[str, Any]:
-        """列出项目的所有分组.
+        """列出项目的所有分组（返回完整配置）.
 
         Args:
             project_id: 项目ID
 
         Returns:
-            分组列表及统计信息
+            分组列表（含完整配置）及全局设置
         """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
         group_configs = await self.storage.get_group_configs(project_id)
+        custom_groups = group_configs.get("groups", {})
 
         groups = []
+
+        # 内置组
         for group_name in all_group_names():
             items = project_data.get(group_name, [])
+            # 获取默认配置
+            config = UnifiedGroupConfig.from_dict(DEFAULT_GROUP_CONFIGS.get(group_name, {}))
+            # 如果自定义组覆盖了内置组配置，使用自定义配置
+            if group_name in custom_groups:
+                config = UnifiedGroupConfig.from_dict(custom_groups[group_name])
+
             groups.append({
                 "name": group_name,
-                "count": len(items)
+                "count": len(items),
+                "is_builtin": True,
+                **config.to_dict()
             })
 
-        # 添加自定义组
-        custom_groups = group_configs.get("groups", {})
-        for group_name in custom_groups.keys():
+        # 自定义组（不在内置组列表中的）
+        for group_name, config_dict in custom_groups.items():
             if group_name not in all_group_names():
                 items = project_data.get(group_name, [])
+                config = UnifiedGroupConfig.from_dict(config_dict)
                 groups.append({
                     "name": group_name,
                     "count": len(items),
-                    "is_custom": True
+                    "is_builtin": False,
+                    **config.to_dict()
                 })
 
         return {
             "success": True,
-            "groups": groups
+            "groups": groups,
+            "settings": group_configs.get("group_settings", {})
         }
+
+    async def get_group_config(self, project_id: str, group: str) -> Dict[str, Any]:
+        """获取单个组的配置.
+
+        Args:
+            project_id: 项目ID
+            group: 组名称
+
+        Returns:
+            组配置对象或错误信息
+        """
+        group_configs = await self.storage.get_group_configs(project_id)
+
+        # 先检查自定义组
+        custom_groups = group_configs.get("groups", {})
+        if group in custom_groups:
+            return {
+                "success": True,
+                "config": UnifiedGroupConfig.from_dict(custom_groups[group]).to_dict()
+            }
+
+        # 再检查内置组
+        if group in DEFAULT_GROUP_CONFIGS:
+            return {
+                "success": True,
+                "config": DEFAULT_GROUP_CONFIGS[group]
+            }
+
+        return {"success": False, "error": f"组 '{group}' 不存在"}
+
+    @barrier(level=OperationLevel.L3, files=["_groups.json"], key="{project_id}")
+    async def update_group_config(
+        self,
+        project_id: str,
+        group: str,
+        config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """更新单个组的配置.
+
+        Args:
+            project_id: 项目ID
+            group: 组名称
+            config: 完整的组配置对象
+
+        Returns:
+            操作结果
+        """
+        group_configs = await self.storage.get_group_configs(project_id)
+
+        # 验证组名
+        is_valid, error_msg = validate_group_name(
+            group,
+            group_configs.get("groups", {})
+        )
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
+        # 验证配置对象
+        try:
+            unified_config = UnifiedGroupConfig.from_dict(config)
+        except Exception as e:
+            return {"success": False, "error": f"配置格式错误: {e}"}
+
+        # 更新配置
+        if "groups" not in group_configs:
+            group_configs["groups"] = {}
+        group_configs["groups"][group] = unified_config.to_dict()
+
+        # 保存
+        if await self.storage.save_group_configs(project_id, group_configs):
+            return {"success": True, "message": f"组 '{group}' 配置已更新"}
+
+        return {"success": False, "error": "保存配置失败"}

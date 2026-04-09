@@ -423,18 +423,40 @@ class BusinessApiAsyncClient:
         params = {"project_id": project_id, "group_name": group_name}
         return await self._delete("/api/groups/custom", params=params)
 
-    async def get_group_settings(self, project_id: str) -> ApiResponse:
-        """获取组设置."""
-        return await self._get("/api/groups/settings", params={"project_id": project_id})
+    async def get_group_settings(self, project_id: str, group: str = "") -> ApiResponse:
+        """获取组设置（支持单组查询）.
+
+        Args:
+            project_id: 项目ID
+            group: 组名称（可选），传入时返回该组的配置
+        """
+        params = {"project_id": project_id}
+        if group:
+            params["group"] = group
+        return await self._get("/api/groups/settings", params=params)
 
     async def update_group_settings(
         self,
         project_id: str,
-        default_related_rules: Optional[Dict] = None
+        group: str = "",
+        default_related_rules: Optional[Dict] = None,
+        config: Optional[Dict] = None
     ) -> ApiResponse:
-        """更新组设置."""
-        params = {"project_id": project_id, "default_related_rules": default_related_rules}
-        return await self._put("/api/groups/settings", params=params)
+        """更新组设置（支持单组更新）.
+
+        Args:
+            project_id: 项目ID
+            group: 组名称（可选），传入时更新该组的配置
+            default_related_rules: 默认关联规则（不传 group 时使用）
+            config: 组配置对象（传 group 时使用）
+        """
+        params = {"project_id": project_id}
+        if group:
+            params["group"] = group
+            json_data = {"config": config}
+        else:
+            json_data = {"default_related_rules": default_related_rules}
+        return await self._put("/api/groups/settings", params=params, json=json_data)
 
 
 # 全局异步客户端实例

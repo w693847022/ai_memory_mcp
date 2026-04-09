@@ -1,6 +1,6 @@
 """Business API - Groups 路由."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 
 from business.core.groups import UnifiedGroupConfig, GroupType, all_group_names
 from business.core.barrier_decorator import barrier
@@ -9,12 +9,14 @@ from business.models.response import ApiResponse
 
 # 全局服务实例
 _storage = None
+_project_service = None
 
 
-def init_services(storage):
+def init_services(storage, project_service=None):
     """初始化服务实例."""
-    global _storage
+    global _storage, _project_service
     _storage = storage
+    _project_service = project_service
 
 
 router = APIRouter(prefix="/api", tags=["groups"])
@@ -177,14 +179,41 @@ async def delete_custom_group(project_id: str, group_name: str):
 
 
 @router.get("/groups/settings")
-async def get_group_settings(project_id: str):
-    """获取组设置."""
-    group_configs = await _storage.get_group_configs(project_id)
-    settings = group_configs.get("group_settings", {})
-    return ApiResponse(success=True, data={"settings": settings, "group_settings": settings}).to_dict()
+async def get_group_settings(project_id: str, group: str = ""):
+    """获取组设置（支持单组查询）."""
+    if group:
+        # 获取单个组配置
+        if _project_service is None:
+            raise HTTPException(status_code=500, detail="项目服务未初始化")
+        result = await _project_service.get_group_config(project_id, group)
+        if result["success"]:
+            return ApiResponse(success=True, data={"config": result.get("config")}).to_dict()
+        raise HTTPException(status_code=404, detail=result.get("error"))
+    else:
+        # 获取全局设置（保持向后兼容）
+        group_configs = await _storage.get_group_configs(project_id)
+        settings = group_configs.get("group_settings", {})
+        return ApiResponse(success=True, data={"settings": settings}).to_dict()
 
 
 @router.put("/groups/settings")
-async def update_group_settings(project_id: str, default_related_rules: dict = None):
-    """更新组设置."""
-    return await _update_group_settings(project_id, default_related_rules)
+async def update_group_settings(
+    project_id: str,
+    group: str = "",
+    default_related_rules: dict = None,
+    config: dict = Body(None)
+):
+    """更新组设置（支持单组更新）."""
+    if group:
+        # 更新单个组配置
+        if config is None:
+            raise HTTPException(status_code=400, detail="更新组配置时必须提供 config 参数")
+        if _project_service is None:
+            raise HTTPException(status_code=500, detail="项目服务未初始化")
+        result = await _project_service.update_group_config(project_id, group, config)
+        if result["success"]:
+            return ApiResponse(success=True, message=result.get("message")).to_dict()
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    else:
+        # 更新全局设置（保持向后兼容）
+        return await _update_group_settings(project_id, default_related_rules)

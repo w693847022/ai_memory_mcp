@@ -368,7 +368,6 @@ class TestGetGroupSettings:
         data = response
         assert data["success"] is True
         assert "settings" in data["data"]
-        assert "group_settings" in data["data"]
         assert "default_related_rules" in data["data"]["settings"]
 
     @pytest.mark.asyncio

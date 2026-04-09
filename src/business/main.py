@@ -92,7 +92,7 @@ from business.api import (
 init_projects_services(_storage, _project_service, _tag_service)
 init_tags_services(_tag_service)
 init_stats_services(_storage, _stats_service)
-init_groups_services(_storage)
+init_groups_services(_storage, _project_service)
 
 # 注册路由
 app.include_router(projects_router)
