@@ -1,7 +1,7 @@
 ---
 name: do-feature
 description: feature 简短功能开发
-allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_get, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, Read, Grep, Glob, Bash, Skill
+allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_get, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, Read, Grep, Glob, Bash, Bash(python:*), Bash(pytest:*), Skill, wc, AskUserQuestion
 argument-hint: <功能描述>
 ---
 
@@ -52,7 +52,7 @@ argument-hint: <功能描述>
 
 ## 阶段 2: 方案设计与选择
 
-**使用技能**: `solution-design`
+**调用技能处理该阶段**: `solution-design`
 
 ```
 Skill: solution-design, args: "<feature_id>"
@@ -72,7 +72,7 @@ Skill: solution-design, args: "<feature_id>"
 
 ## 阶段 3: 代码实现与测试
 
-**使用技能**: `code-implementation`
+**调用技能处理该阶段**: `code-implementation`
 
 ```
 Skill: code-implementation, args: "<feature_id>"
@@ -100,4 +100,6 @@ feature:
 note:
   - note_id:summary (implementation-plan)
   - note_id:summary (development-log)
+
+总结本次修改:xxx
 ```

@@ -1,7 +1,7 @@
 ---
 name: do-fix
 description: fix 简短Bug修复
-allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_get, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, Read, Grep, Glob, Bash, Skill
+allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_get, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, Read, Grep, Glob, Bash, Skill, AskUserQuestion
 argument-hint: <Bug描述>
 ---
 
@@ -101,10 +101,15 @@ Skill: code-implementation, args: "<fix_id>"
 1. 代码实现
 2. 单元测试
 3. 整合测试
-4. 更新development-log
+4. **修复验证**：确认bug确实被修复
+   - 复现问题（如可复现）
+   - 执行修复
+   - 验证修复（确认问题已解决）
+5. 更新development-log
 
 **输出**:
 - `implementation_result`: 实现结果
+- `fix_verified`: 修复验证结果
 
 ---
 
@@ -115,9 +120,14 @@ fix:
   - fix_id
   - fix:summary
   - fix:content
+  - fix:severity
+  - fix:status
 
 note:
   - note_id:summary (requirements)
   - note_id:summary (implementation-plan)
   - note_id:summary (development-log)
+
+验证结果:
+  - fix_verified: <true|false>
 ```
