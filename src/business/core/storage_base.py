@@ -97,10 +97,6 @@ class ProjectStorage:
             if isinstance(data["_group_configs"], dict):
                 data["_group_configs"].setdefault("_v", 1)
 
-    def _get_project_path(self, project_id: str) -> Path:
-        """获取项目文件路径（向后兼容旧格式）."""
-        return self.storage_dir / f"{project_id}.json"
-
     def _get_project_dir(self, project_id: str) -> Path:
         """获取项目目录路径（按项目名称存储）.
 
@@ -282,80 +278,11 @@ class ProjectStorage:
             return False
 
 
-    async def _migrate_project_storage(self, project_id: str) -> bool:
-        """迁移单个项目的存储结构（旧格式 -> 新格式）.
-
-        使用安全迁移流程：新建目录→拷贝数据→归档原文件
-        """
-        old_path = self._get_project_path(project_id)
-
-        if not old_path.exists():
-            return True
-
-        new_dir = self._get_project_dir(project_id)
-        new_json_path = self._get_project_json_path(project_id)
-
-        if new_json_path.exists():
-            return True
-
-        temp_dir = self.storage_dir / f".temp_{project_id}"
-
-        try:
-            # 1. 读取旧数据
-            async with aiofiles.open(old_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            data = json.loads(content)
-
-            # 2. 迁移 content 到独立 .md 文件
-            from src.models.group import CONTENT_SEPARATE_GROUPS
-            for group_name in CONTENT_SEPARATE_GROUPS:
-                for item in data.get(group_name, []):
-                    if "content" in item and item["content"]:
-                        await self._save_item_content(project_id, group_name, item["id"], item["content"])
-                        del item["content"]
-
-            # 3. 创建临时目录并保存新的 project.json
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            temp_json_path = temp_dir / "project.json"
-            async with aiofiles.open(temp_json_path, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(data, ensure_ascii=False, indent=2))
-
-            # 4. 拷贝已有组的 content 目录
-            for group_name in CONTENT_SEPARATE_GROUPS:
-                existing_dir = new_dir / group_name
-                if existing_dir.exists():
-                    temp_group_dir = temp_dir / group_name
-                    shutil.copytree(existing_dir, temp_group_dir, copy_function=shutil.copy2)
-
-            # 5. 将临时目录移动到最终位置
-            temp_dir.rename(new_dir)
-
-            # 6. 归档原文件
-            archive_dir = self.storage_dir / ".archived"
-            archive_dir.mkdir(parents=True, exist_ok=True)
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_name = f"{timestamp}_{project_id}.json"
-            archived_path = archive_dir / archive_name
-
-            old_path.rename(archived_path)
-
-            return True
-
-        except (json.JSONDecodeError, IOError, OSError):
-            if temp_dir.exists():
-                try:
-                    shutil.rmtree(temp_dir)
-                except OSError:
-                    pass
-            return False
-
     async def _load_project(self, project_id: str) -> Optional[ProjectData]:
         """加载单个项目数据并返回 ProjectData 模型.
 
         支持的格式：
-        - 新拆分格式：_project.json, _tags.json, {group}/_index.json
-        - 旧目录格式：project.json（需要手动迁移）
+        - 拆分格式：_project.json, _tags.json, {group}/_index.json
 
         Returns:
             ProjectData 模型实例，如果项目不存在则返回 None
@@ -365,21 +292,12 @@ class ProjectStorage:
         if cached_data is not None:
             return cached_data
 
-        # 加载拆分格式（先加载为原始 dict 进行兼容性处理）
+        # 加载拆分格式 _project.json, _tags.json, {group}/_index.json
         project_json_path = self._get_project_json_path(project_id)
         if project_json_path.exists():
             data = await self._load_split_format(project_id)
         else:
-            # 检查旧格式：项目目录下的 project.json
-            project_dir = self._get_project_dir(project_id)
-            old_project_json = project_dir / "project.json"
-            if old_project_json.exists():
-                # 加载旧格式（不自动迁移）
-                async with aiofiles.open(old_project_json, "r", encoding="utf-8") as f:
-                    content = await f.read()
-                data = json.loads(content)
-            else:
-                return None
+            return None
 
         if data is None:
             return None
@@ -695,15 +613,10 @@ class ProjectStorage:
                     if uuid_val:
                         self._uuid_to_name_cache[uuid_val] = name
 
-        # 检查新格式：目录下的 _project.json 或 project.json（向后兼容）
+        # 检查新格式：目录下的 _project.json
         for project_dir in self.storage_dir.iterdir():
             if project_dir.is_dir():
-                # 优先检查新格式的 _project.json
                 project_json = project_dir / "_project.json"
-                if not project_json.exists():
-                    # 向后兼容：检查旧格式的 project.json
-                    project_json = project_dir / "project.json"
-
                 if project_json.exists():
                     project_name = project_dir.name
                     project_data = await self._load_project(project_name)
@@ -920,13 +833,17 @@ class ProjectStorage:
         return False
 
     def _find_project_name_by_uuid(self, uuid_str: str) -> Optional[str]:
-        """通过 UUID 查找项目名称（目录名）."""
+        """通过 UUID 查找项目名称（目录名）.
+
+        查找新格式的 _project.json 文件。
+        """
         if uuid_str in self._uuid_to_name_cache:
             return self._uuid_to_name_cache[uuid_str]
 
         for project_dir in self.storage_dir.iterdir():
             if project_dir.is_dir():
-                project_json = project_dir / "project.json"
+                # 查找新格式的 _project.json
+                project_json = project_dir / "_project.json"
                 if project_json.exists():
                     try:
                         with open(project_json, "r", encoding="utf-8") as f:

@@ -85,7 +85,7 @@ async def test_complete_workflow():
 
         # 6. 查询功能列表
         print("  步骤6: 查询功能列表...")
-        result = await project_service.get_project(project_id)
+        result = await project_service.get_project(project_id, include_items=True)
         assert result is not None, "查询失败"
         features = result["data"]["features"]
         assert len(features) >= 1, "未找到功能"
@@ -95,7 +95,7 @@ async def test_complete_workflow():
         print("  步骤7: 更新功能状态...")
         result = await project_service.update_item(project_id, "features", feature_id, status="in_progress")
         assert result["success"], f"更新功能失败: {result}"
-        project_data = await project_service.get_project(project_id)
+        project_data = await project_service.get_project(project_id, include_items=True)
         feature = project_data["data"]["features"][0]
         assert feature["status"] == "in_progress", "状态更新不正确"
         print("    ✓ 功能状态已更新")
@@ -128,7 +128,7 @@ async def test_complete_workflow():
 
         # 10. 查看分组统计
         print("  步骤10: 查看分组统计...")
-        project_data = await project_service.get_project(project_id)
+        project_data = await project_service.get_project(project_id, include_items=True)
         data = project_data["data"]
         print(f"    ✓ 分组统计: features={len(data['features'])}, "
               f"notes={len(data['notes'])}, "
@@ -139,7 +139,7 @@ async def test_complete_workflow():
         print("  步骤11: 删除功能...")
         result = await project_service.delete_item(project_id, "features", feature_id)
         assert result["success"], f"删除功能失败: {result}"
-        project_data = await project_service.get_project(project_id)
+        project_data = await project_service.get_project(project_id, include_items=True)
         assert len(project_data["data"]["features"]) == 0, "功能未正确删除"
         print("    ✓ 功能已删除")
 
@@ -184,9 +184,9 @@ async def test_multi_project_workflow():
         assert result["data"]["total"] == 3, f"项目数量不正确: {result['data']['total']}"
 
         # 验证各项目数据独立
-        data_a = await project_service.get_project(project_a["data"]["project_id"])
-        data_b = await project_service.get_project(project_b["data"]["project_id"])
-        data_c = await project_service.get_project(project_c["data"]["project_id"])
+        data_a = await project_service.get_project(project_a["data"]["project_id"], include_items=True)
+        data_b = await project_service.get_project(project_b["data"]["project_id"], include_items=True)
+        data_c = await project_service.get_project(project_c["data"]["project_id"], include_items=True)
 
         assert len(data_a["data"]["features"]) == 1, "项目A功能数量不正确"
         assert len(data_b["data"]["features"]) == 1, "项目B功能数量不正确"

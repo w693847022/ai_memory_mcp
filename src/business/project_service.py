@@ -163,18 +163,33 @@ class ProjectService:
             data={"projects": projects, "total": len(projects)}
         ).to_dict()
 
-    async def get_project(self, project_id: str) -> Dict[str, Any]:
+    async def get_project(self, project_id: str, include_items: bool = False) -> Dict[str, Any]:
+        """获取项目信息.
+
+        Args:
+            project_id: 项目ID
+            include_items: 是否包含分组条目数据（默认False，仅返回元数据）
+        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return ResponseBuilder.error(
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
-        # 使用 to_storage() 转换为 dict 用于响应
-        data_dict = project_data.to_storage()
-        # 添加版本信息到数据字典中
-        data_dict[FieldNames.VERSION] = project_data.version
-        data_dict[FieldNames.VERSIONS] = project_data.versions
+        if include_items:
+            # 完整数据：包含所有分组条目和标签详情
+            data_dict = project_data.to_storage()
+        else:
+            # 仅元数据：不包含分组条目和标签详情
+            data_dict = {
+                "id": project_data.id,
+                "name": project_data.name,
+                "_version": project_data.version,
+                "_versions": dict(project_data.versions),
+                "info": project_data.metadata.model_dump(),
+                "tag_count": len(project_data.tag_registry),
+                "_group_configs": project_data.group_configs,
+            }
         return ResponseBuilder.success(data=data_dict).to_dict()
 
     # ==================== 条目操作 ====================

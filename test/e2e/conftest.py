@@ -163,3 +163,37 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     setattr(item, f"rep_{rep.when}", rep)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """测试会话结束时的钩子 - 确保所有服务都已关闭."""
+    import subprocess
+    print("\n[pytest_sessionfinish] 清理测试服务...")
+    for server in _active_servers[:]:  # 复制列表避免迭代时修改
+        try:
+            print(f"[{server.name}] 停止服务器...")
+            server.stop()
+            server.cleanup()
+            _active_servers.remove(server)
+        except Exception as e:
+            print(f"[{server.name}] 清理失败: {e}")
+
+    # 验证测试端口已释放
+    test_ports = [18000, 18001, 18002]
+    ports_in_use = []
+    for port in test_ports:
+        try:
+            result = subprocess.run(
+                ["lsof", "-i", f":{port}"],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                ports_in_use.append(port)
+        except Exception:
+            pass  # lsof 可能不可用
+
+    if ports_in_use:
+        print(f"[pytest_sessionfinish] 警告: 端口 {ports_in_use} 仍被占用")
+    else:
+        print("[pytest_sessionfinish] 所有测试端口已释放")
+    print("[pytest_sessionfinish] 清理完成")

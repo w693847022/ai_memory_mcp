@@ -85,8 +85,10 @@ class ProjectData(BaseModel):
             if isinstance(tag_data, TagInfo):
                 tag_registry[tag_name] = tag_data
             else:
-                tag_registry[tag_name] = TagInfo(
-                    name=tag_name,
+                # 向后兼容：将标签名转换为小写以符合验证规则
+                normalized_name = tag_name.lower()
+                tag_registry[normalized_name] = TagInfo(
+                    name=normalized_name,
                     summary=tag_data.get("summary", ""),
                     aliases=tag_data.get("aliases", []),
                     usage_count=tag_data.get("usage_count", 0)
@@ -116,7 +118,7 @@ class ProjectData(BaseModel):
 
         return cls(
             id=data.get("id", ""),
-            name=data.get("name", ""),
+            name=info.get("name", ""),
             version=data.get("_version", 1),
             versions=data.get("_versions", {}),
             metadata=metadata,

@@ -282,7 +282,9 @@ async def project_get(
             raise HTTPException(status_code=400, detail=f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
 
     size = resolve_default_size(size, view_mode)
-    result = await _project_service.get_project(project_id)
+    # 当不需要具体分组数据时，使用精简模式
+    include_items = bool(group_name)
+    result = await _project_service.get_project(project_id, include_items=include_items)
 
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result.get("error"))
@@ -375,8 +377,8 @@ async def project_get(
         "project_id": project_id,
         "info": data['info'],
         "groups": {
-            "features": {"count": len(data["features"])},
-            "notes": {"count": len(data["notes"])},
+            "features": {"count": len(data.get("features", []))},
+            "notes": {"count": len(data.get("notes", []))},
             "fixes": {"count": len(data.get("fixes", []))},
             "standards": {"count": len(data.get("standards", []))}
         }
