@@ -9,7 +9,17 @@ import os
 from pathlib import Path
 
 # 添加 src 目录到 Python 路径
-src_path = Path(__file__).parent / "src"
+# 检测运行环境：Docker 中脚本位于 /app/，本地位于 /path/to/project/scripts/
+if Path(__file__).parent.name == "app" or str(Path(__file__).parent) == "/app":
+    # Docker 环境
+    src_path = Path("/app/src")
+    project_root = Path("/app")
+else:
+    # 本地环境
+    project_root = Path(__file__).parent.parent
+    src_path = project_root / "src"
+
+sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(src_path))
 
 if __name__ == "__main__":

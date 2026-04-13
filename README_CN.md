@@ -70,9 +70,10 @@ ai_memory_mcp/
 ├── examples/          # 示例代码（agents/skills）
 ├── docs/              # 文档
 ├── config/            # 配置文件
-├── run_mcp.py         # MCP 启动脚本
-├── start_business.py  # 业务服务启动脚本
-└── start_fastapi.py   # FastAPI 启动脚本
+├── scripts/           # 工具脚本
+│   ├── start_mcp.py         # MCP 启动脚本
+│   ├── start_business.py    # 业务服务启动脚本
+│   └── start_fastapi.py     # FastAPI 启动脚本
 ```
 
 ---
@@ -109,35 +110,19 @@ conda activate ai_memory_mcp
 pip install -r requirements.txt
 
 # 3. 启动业务服务
-python start_business.py
+python scripts/start_business.py
 
 # 4. 启动 MCP 服务器（新终端）
-python run_mcp.py
+python scripts/start_mcp.py
 
 # 5. 启动 FastAPI 服务（可选，新终端）
-python start_fastapi.py
+python scripts/start_fastapi.py
 ```
 
 ### Claude Code 配置
 
 编辑 Claude Code 配置文件，添加 MCP 服务器：
 
-**本地模式**：
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "python",
-      "args": ["/path/to/ai_memory_mcp/run_mcp.py"],
-      "env": {
-        "PYTHONPATH": "/path/to/ai_memory_mcp/src"
-      }
-    }
-  }
-}
-```
-
-**Docker 模式**：
 ```json
 {
   "mcpServers": {

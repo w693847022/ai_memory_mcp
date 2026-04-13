@@ -194,8 +194,8 @@ class McpTestServer(TestServer):
         env["BUSINESS_API_URL"] = self.business_url
         env["PYTHONUNBUFFERED"] = "1"
 
-        # 使用 run_mcp.py 启动
-        run_mcp_path = Path(__file__).parent.parent.parent / "run_mcp.py"
+        # 使用 start_mcp.py 启动
+        run_mcp_path = Path(__file__).parent.parent.parent / "scripts" / "start_mcp.py"
         cmd = [sys.executable, str(run_mcp_path)]
 
         print(f"{self._log_prefix} 启动命令: {' '.join(cmd)}")

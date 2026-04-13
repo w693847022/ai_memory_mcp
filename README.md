@@ -70,9 +70,10 @@ ai_memory_mcp/
 ├── examples/          # Example code (agents/skills)
 ├── docs/              # Documentation
 ├── config/            # Configuration files
-├── run_mcp.py         # MCP startup script
-├── start_business.py  # Business service startup script
-└── start_fastapi.py   # FastAPI startup script
+├── scripts/           # Utility scripts
+│   ├── start_mcp.py         # MCP startup script
+│   ├── start_business.py    # Business service startup script
+│   └── start_fastapi.py     # FastAPI startup script
 ```
 
 ---
@@ -109,35 +110,19 @@ conda activate ai_memory_mcp
 pip install -r requirements.txt
 
 # 3. Start business service
-python start_business.py
+python scripts/start_business.py
 
 # 4. Start MCP server (new terminal)
-python run_mcp.py
+python scripts/start_mcp.py
 
 # 5. Start FastAPI service (optional, new terminal)
-python start_fastapi.py
+python scripts/start_fastapi.py
 ```
 
 ### Claude Code Configuration
 
 Edit Claude Code configuration file and add MCP server:
 
-**Local Mode**:
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "python",
-      "args": ["/path/to/ai_memory_mcp/run_mcp.py"],
-      "env": {
-        "PYTHONPATH": "/path/to/ai_memory_mcp/src"
-      }
-    }
-  }
-}
-```
-
-**Docker Mode**:
 ```json
 {
   "mcpServers": {

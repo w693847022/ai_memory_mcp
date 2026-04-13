@@ -20,7 +20,6 @@ RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --defa
 
 # 复制项目文件
 COPY src/ ./src/
-COPY run_mcp.py .
 
 # 创建数据目录和日志目录
 RUN mkdir -p /app/.project_memory_ai /app/logs
@@ -29,4 +28,4 @@ RUN mkdir -p /app/.project_memory_ai /app/logs
 EXPOSE 8000
 
 # 启动命令
-CMD ["python", "run_mcp.py", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "/app/start_mcp.py", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]

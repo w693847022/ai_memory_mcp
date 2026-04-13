@@ -35,6 +35,8 @@ services:
       - ${LOG_HOST_PATH:-~/.project_memory_ai/logs}:/app/logs
       # 挂载源代码（开发模式热更新）
       - ../src:/app/src:ro
+      # 挂载启动脚本
+      - ../scripts/start_business.py:/app/start_business.py:ro
     networks:
       - mcp-network
     healthcheck:
@@ -86,7 +88,7 @@ services:
       - ${LOG_HOST_PATH:-~/.project_memory_ai/logs}:/app/logs
       # 挂载源代码（开发模式热更新）
       - ../src:/app/src:ro
-      - ../run_mcp.py:/app/run_mcp.py:ro
+      - ../scripts/start_mcp.py:/app/start_mcp.py:ro
     networks:
       - mcp-network
     depends_on:
@@ -133,6 +135,8 @@ services:
       - ${LOG_HOST_PATH:-~/.project_memory_ai/logs}:/app/logs
       # 挂载源代码（开发模式热更新）
       - ../src:/app/src:ro
+      # 挂载启动脚本
+      - ../scripts/start_fastapi.py:/app/start_fastapi.py:ro
     networks:
       - mcp-network
     depends_on:
