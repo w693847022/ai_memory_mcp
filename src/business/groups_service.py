@@ -258,7 +258,7 @@ class GroupsService:
         group: str,
         config: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """更新组配置."""
+        """更新组配置（支持部分更新，只更新传入的字段，未传入的字段保持原值）."""
         group_configs = await self.storage.get_group_configs(project_id)
         groups = group_configs.get("groups", {})
 
@@ -266,8 +266,22 @@ class GroupsService:
         if not is_valid:
             return ResponseBuilder.error(error_msg or "无效的组名").to_dict()
 
+        # 获取现有配置
+        existing_config = groups.get(group)
+        if existing_config is None:
+            return ResponseBuilder.error(f"组 '{group}' 不存在").to_dict()
+
+        # 将现有配置转换为字典
+        if isinstance(existing_config, UnifiedGroupConfig):
+            existing_dict = existing_config.to_dict()
+        else:
+            existing_dict = dict(existing_config)
+
+        # 合并配置：新配置覆盖现有配置的对应字段
+        merged_dict = {**existing_dict, **config}
+
         try:
-            unified_config = UnifiedGroupConfig.from_dict(config)
+            unified_config = UnifiedGroupConfig.from_dict(merged_dict)
         except Exception as e:
             return ResponseBuilder.error(f"配置格式错误: {e}").to_dict()
 

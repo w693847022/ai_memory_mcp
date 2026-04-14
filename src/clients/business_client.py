@@ -409,13 +409,19 @@ class BusinessApiClient:
         allow_related: Optional[bool] = None,
         allowed_related_to: Optional[str] = None,
         enable_status: Optional[bool] = None,
-        enable_severity: Optional[bool] = None
+        enable_severity: Optional[bool] = None,
+        max_tags: Optional[int] = None,
+        status_values: Optional[str] = None,
+        severity_values: Optional[str] = None,
+        required_fields: Optional[str] = None
     ) -> ApiResponse:
         """更新组配置."""
         params = {"project_id": project_id, "group_name": group_name}
         for k, v in [("content_max_bytes", content_max_bytes), ("summary_max_bytes", summary_max_bytes),
                      ("allow_related", allow_related), ("allowed_related_to", allowed_related_to),
-                     ("enable_status", enable_status), ("enable_severity", enable_severity)]:
+                     ("enable_status", enable_status), ("enable_severity", enable_severity),
+                     ("max_tags", max_tags), ("status_values", status_values),
+                     ("severity_values", severity_values), ("required_fields", required_fields)]:
             if v is not None:
                 params[k] = v
         return self._put("/api/groups/custom", params=params)
