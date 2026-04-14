@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
+from src.models.config import get_settings
+
 
 # ==================== 常量 ====================
 
@@ -17,8 +19,29 @@ RESERVED_FIELDS = ["id", "info", "tag_registry"]
 # 使用独立文件存储 content 的默认组
 CONTENT_SEPARATE_GROUPS = {"features", "fixes", "notes", "standards"}
 
-# 默认内置组配置（用于项目注册初始化，写入 _groups.json 后不再使用）
-DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
+def get_default_group_configs() -> Dict[str, Dict[str, Any]]:
+    """获取默认组配置（从Settings加载，供项目注册初始化使用）."""
+    try:
+        settings = get_settings()
+        groups_data = settings.groups.model_dump()
+        result = {}
+        for name, config_data in groups_data.items():
+            # 添加 is_builtin 标志
+            config_data["is_builtin"] = True
+            # 确保 required_fields 包含必要字段
+            if "content" not in config_data.get("required_fields", []):
+                config_data.setdefault("required_fields", []).insert(0, "content")
+            if "summary" not in config_data.get("required_fields", []):
+                config_data.setdefault("required_fields", []).insert(0, "summary")
+            result[name] = config_data
+        return result
+    except Exception:
+        # 回退到硬编码默认值（保持向后兼容）
+        return _DEFAULT_GROUP_CONFIGS_FALLBACK
+
+
+# 硬编码默认值（仅用于回退）
+_DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
     "features": {
         "content_max_bytes": 4000,
         "summary_max_bytes": 90,
@@ -143,3 +166,7 @@ class GroupSettings(BaseModel):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GroupSettings":
         return cls(default_related_rules=data.get("default_related_rules", {}))
+
+
+# Backward compatibility alias - points to fallback values
+DEFAULT_GROUP_CONFIGS = _DEFAULT_GROUP_CONFIGS_FALLBACK
