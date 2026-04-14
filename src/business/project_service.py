@@ -205,7 +205,7 @@ class ProjectService:
         content: str,
         summary: str,
         status: Optional[str],
-        severity: str,
+        severity: Optional[str],
         related: Optional[Union[str, Dict[str, List[str]]]],
         tag_list: List[str],
     ) -> Dict[str, Any]:
@@ -217,25 +217,29 @@ class ProjectService:
 
         config = all_configs.get(group)
 
-        if config and config.status_values:
-            if status is None:
-                return {"success": False, "error": "features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)"}
-            is_valid, error_msg = GroupsService.validate_status(status, config)
-            if not is_valid:
-                return {"success": False, "error": error_msg}
-        elif config and config.enable_status:
-            if status is None:
-                return {"success": False, "error": f"'{group}' 分组必须传入 status 参数"}
-            is_valid, error_msg = GroupsService.validate_status(status, config)
-            if not is_valid:
-                return {"success": False, "error": error_msg}
-        else:
+        # status 验证
+        if config and config.enable_status:
+            if "status" in config.required_fields and status is None:
+                valid_values = "/".join(config.status_values) if config.status_values else "N/A"
+                return {"success": False, "error": f"'{group}' 分组 status 参数不能为空 (有效值: {valid_values})"}
+            if status is not None:
+                is_valid, error_msg = GroupsService.validate_status(status, config)
+                if not is_valid:
+                    return {"success": False, "error": error_msg}
+        elif config:
             status = None
 
-        if severity is not None:
-            is_valid, error_msg = GroupsService.validate_severity(severity, config)
-            if not is_valid:
-                return {"success": False, "error": error_msg}
+        # severity 验证
+        if config and config.enable_severity:
+            if "severity" in config.required_fields and severity is None:
+                valid_values = "/".join(config.severity_values) if config.severity_values else "N/A"
+                return {"success": False, "error": f"'{group}' 分组 severity 参数不能为空 (有效值: {valid_values})"}
+            if severity is not None:
+                is_valid, error_msg = GroupsService.validate_severity(severity, config)
+                if not is_valid:
+                    return {"success": False, "error": error_msg}
+        elif config:
+            severity = None
 
         if not content:
             return {"success": False, "error": "content 参数不能为空"}
@@ -289,21 +293,23 @@ class ProjectService:
 
         config = all_configs.get(group)
 
-        if config and config.status_values:
+        # status 验证（只验证传入的值）
+        if config and config.enable_status:
             if status is not None:
                 is_valid, error_msg = GroupsService.validate_status(status, config)
                 if not is_valid:
                     return {"success": False, "error": error_msg}
-        elif config and config.enable_status:
-            if status is not None:
-                is_valid, error_msg = GroupsService.validate_status(status, config)
-                if not is_valid:
-                    return {"success": False, "error": error_msg}
+        elif config:
+            status = None
 
-        if severity is not None:
-            is_valid, error_msg = GroupsService.validate_severity(severity, config)
-            if not is_valid:
-                return {"success": False, "error": error_msg}
+        # severity 验证（只验证传入的值）
+        if config and config.enable_severity:
+            if severity is not None:
+                is_valid, error_msg = GroupsService.validate_severity(severity, config)
+                if not is_valid:
+                    return {"success": False, "error": error_msg}
+        elif config:
+            severity = None
 
         if content is not None:
             if not content:
