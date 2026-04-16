@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 
 
 @pytest.mark.asyncio
@@ -46,7 +47,8 @@ class TestMaxTagsValidation:
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
         self.groups_service = GroupsService(self.storage)
-        self.project_service = ProjectService(self.storage, self.groups_service)
+        self.item_validator = ItemValidator(self.storage)
+        self.project_service = ProjectService(self.storage, item_validator=self.item_validator)
 
         # 注册测试项目
         result = await self.project_service.register_project("测试项目", "/tmp/test")
@@ -272,7 +274,8 @@ class TestMaxTagsValidation:
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
         self.groups_service = GroupsService(self.storage)
-        self.project_service = ProjectService(self.storage, self.groups_service)
+        self.item_validator = ItemValidator(self.storage)
+        self.project_service = ProjectService(self.storage, item_validator=self.item_validator)
 
         # 注册项目
         result = await self.project_service.register_project("测试项目", "/tmp/test")

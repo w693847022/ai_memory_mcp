@@ -17,6 +17,7 @@ from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
 from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 
 
 @pytest.mark.asyncio
@@ -40,7 +41,8 @@ class TestApiIntegration:
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
         self.groups_service = GroupsService(self.storage)
-        self.project_service = ProjectService(self.storage, self.groups_service)
+        self.item_validator = ItemValidator(self.storage)
+        self.project_service = ProjectService(self.storage, item_validator=self.item_validator)
         self.tag_service = TagService(self.storage)
 
     async def test_project_list_integration(self):

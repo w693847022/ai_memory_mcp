@@ -17,6 +17,7 @@ from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
 from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 
 
 @pytest.mark.asyncio
@@ -29,7 +30,8 @@ async def test_complete_workflow():
     try:
         storage = Storage(storage_dir=temp_dir)
         groups_service = GroupsService(storage)
-        project_service = ProjectService(storage, groups_service)
+        item_validator = ItemValidator(storage)
+        project_service = ProjectService(storage, item_validator=item_validator)
         tag_service = TagService(storage)
 
         # 1. 注册项目
@@ -168,7 +170,8 @@ async def test_multi_project_workflow():
     try:
         storage = Storage(storage_dir=temp_dir)
         groups_service = GroupsService(storage)
-        project_service = ProjectService(storage, groups_service)
+        item_validator = ItemValidator(storage)
+        project_service = ProjectService(storage, item_validator=item_validator)
 
         # 创建多个项目
         print("  创建多个项目...")

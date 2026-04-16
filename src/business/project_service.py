@@ -16,7 +16,7 @@ from src.models.group import (
     CONTENT_SEPARATE_GROUPS,
 )
 from src.models.group import UnifiedGroupConfig
-from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
 from src.common.consts import (
@@ -34,13 +34,13 @@ from src.models.response import ResponseBuilder
 class ProjectService:
     """项目管理业务逻辑服务类."""
 
-    def __init__(self, storage, groups_service: Optional[GroupsService] = None):
+    def __init__(self, storage, item_validator: Optional[ItemValidator] = None):
         self.storage = storage
-        # 如果未提供 groups_service，创建一个默认实例
-        if groups_service is None:
-            self.groups_service = GroupsService(storage)
+        # 如果未提供 item_validator，创建一个默认实例
+        if item_validator is None:
+            self.item_validator = ItemValidator(storage)
         else:
-            self.groups_service = groups_service
+            self.item_validator = item_validator
 
     # ==================== 验证辅助方法 ====================
 
@@ -210,9 +210,9 @@ class ProjectService:
         related: Optional[Union[str, Dict[str, List[str]]]],
         tag_list: List[str],
     ) -> Dict[str, Any]:
-        all_configs = await self.groups_service.get_all_configs(project_id)
+        all_configs = await self.item_validator.get_all_configs(project_id)
 
-        is_valid, error_msg = GroupsService.validate_group_name(group, all_configs)
+        is_valid, error_msg = ItemValidator.validate_group_name(group, all_configs)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -224,7 +224,7 @@ class ProjectService:
                 valid_values = "/".join(config.status_values) if config.status_values else "N/A"
                 return {"success": False, "error": f"'{group}' 分组 status 参数不能为空 (有效值: {valid_values})"}
             if status is not None:
-                is_valid, error_msg = GroupsService.validate_status(status, config)
+                is_valid, error_msg = ItemValidator.validate_status(status, config)
                 if not is_valid:
                     return {"success": False, "error": error_msg}
         elif config:
@@ -236,7 +236,7 @@ class ProjectService:
                 valid_values = "/".join(config.severity_values) if config.severity_values else "N/A"
                 return {"success": False, "error": f"'{group}' 分组 severity 参数不能为空 (有效值: {valid_values})"}
             if severity is not None:
-                is_valid, error_msg = GroupsService.validate_severity(severity, config)
+                is_valid, error_msg = ItemValidator.validate_severity(severity, config)
                 if not is_valid:
                     return {"success": False, "error": error_msg}
         elif config:
@@ -245,14 +245,14 @@ class ProjectService:
         if not content:
             return {"success": False, "error": "content 参数不能为空"}
 
-        is_valid, error_msg, _ = GroupsService.validate_content_length(content, config)
+        is_valid, error_msg, _ = ItemValidator.validate_content_length(content, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
         if not summary or not summary.strip():
             return {"success": False, "error": "summary 参数不能为空"}
 
-        is_valid, error_msg, _ = GroupsService.validate_summary_length(summary, config)
+        is_valid, error_msg, _ = ItemValidator.validate_summary_length(summary, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -264,11 +264,11 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        is_valid, error_msg = GroupsService.validate_tags_count(tag_list, config)
+        is_valid, error_msg = ItemValidator.validate_tags_count(tag_list, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        is_valid, error_msg, related_dict = GroupsService.validate_related(related, group, config)
+        is_valid, error_msg, related_dict = ItemValidator.validate_related(related, group, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -286,9 +286,9 @@ class ProjectService:
         related: Optional[Union[str, Dict[str, List[str]]]] = None,
         tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        all_configs = await self.groups_service.get_all_configs(project_id)
+        all_configs = await self.item_validator.get_all_configs(project_id)
 
-        is_valid, error_msg = GroupsService.validate_group_name(group, all_configs)
+        is_valid, error_msg = ItemValidator.validate_group_name(group, all_configs)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -297,7 +297,7 @@ class ProjectService:
         # status 验证（只验证传入的值）
         if config and config.enable_status:
             if status is not None:
-                is_valid, error_msg = GroupsService.validate_status(status, config)
+                is_valid, error_msg = ItemValidator.validate_status(status, config)
                 if not is_valid:
                     return {"success": False, "error": error_msg}
         elif config:
@@ -306,7 +306,7 @@ class ProjectService:
         # severity 验证（只验证传入的值）
         if config and config.enable_severity:
             if severity is not None:
-                is_valid, error_msg = GroupsService.validate_severity(severity, config)
+                is_valid, error_msg = ItemValidator.validate_severity(severity, config)
                 if not is_valid:
                     return {"success": False, "error": error_msg}
         elif config:
@@ -315,20 +315,20 @@ class ProjectService:
         if content is not None:
             if not content:
                 return {"success": False, "error": "content 不能为空"}
-            is_valid, error_msg, _ = GroupsService.validate_content_length(content, config)
+            is_valid, error_msg, _ = ItemValidator.validate_content_length(content, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
         if summary is not None:
             if not summary.strip():
                 return {"success": False, "error": "summary 不能为空"}
-            is_valid, error_msg, _ = GroupsService.validate_summary_length(summary, config)
+            is_valid, error_msg, _ = ItemValidator.validate_summary_length(summary, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
         related_dict = None
         if related is not None:
-            is_valid, error_msg, related_dict = GroupsService.validate_related(related, group, config)
+            is_valid, error_msg, related_dict = ItemValidator.validate_related(related, group, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
@@ -337,7 +337,7 @@ class ProjectService:
                 is_valid, error_msg = self._validate_tag_length(tag, max_tokens=10)
                 if not is_valid:
                     return {"success": False, "error": error_msg}
-            is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
+            is_valid, error_msg = ItemValidator.validate_tags_count(tags, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
@@ -355,7 +355,7 @@ class ProjectService:
         related: Optional[Dict[str, List[str]]] = None,
         tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        all_configs = await self.groups_service.get_all_configs(project_id)
+        all_configs = await self.item_validator.get_all_configs(project_id)
         config = all_configs.get(group)
 
         # 不支持对应字段的分组，强制忽略传入值（写入层兜底）
@@ -373,7 +373,7 @@ class ProjectService:
                 return {"success": False, "error": "tags 参数不能为空"}
 
             # 验证标签数量
-            is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
+            is_valid, error_msg = ItemValidator.validate_tags_count(tags, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
@@ -454,7 +454,7 @@ class ProjectService:
         tags: Optional[List[str]] = None,
         expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
-        all_configs = await self.groups_service.get_all_configs(project_id)
+        all_configs = await self.item_validator.get_all_configs(project_id)
         config = all_configs.get(group)
 
         # 不支持对应字段的分组，强制忽略传入值（写入层兜底）
@@ -467,7 +467,7 @@ class ProjectService:
 
         # 验证标签数量
         if tags is not None:
-            is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
+            is_valid, error_msg = ItemValidator.validate_tags_count(tags, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
