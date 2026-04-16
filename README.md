@@ -11,18 +11,18 @@
 
 ## Project Overview
 
-**AI Memory MCP** is an MCP server specifically designed for Claude Code to provide persistent project memory. It enables AI to remember your project development journey across sessions, including feature planning, bug fixes, development notes, code standards, and other critical information - acting as your "second brain" during development.
+**AI Memory MCP** is an MCP server designed for Claude Code to provide persistent project memory. It enables AI to remember your project development journey across sessions, including feature planning, bug fixes, development notes, and code standards.
 
 ### Key Features
 
 | Feature | Description |
 |---------|-------------|
 | **Structured Memory** | Categorizes project info into Features, Fixes, Notes, and Standards |
-| **Smart Associations** | Links between entries to build complete project knowledge graph |
-| **Tag System** | Powerful tag management for cross-dimensional queries and experience reuse |
-| **Three-Tier Architecture** | Separated MCP Server, FastAPI Server, and Business Server for easy scaling |
-| **Fully Async** | High-performance async architecture supporting concurrent access |
-| **Docker Deployment** | One-click containerized deployment with persistent data storage |
+| **Associations** | Links between entries to build project knowledge graph |
+| **Tag System** | Tag management for cross-dimensional queries and experience reuse |
+| **Three-Tier Architecture** | Separated MCP Server, FastAPI Server, and Business Server |
+| **Async Design** | Asynchronous architecture supporting concurrent access |
+| **Docker Deployment** | Containerized deployment with persistent data storage |
 
 ---
 
@@ -80,7 +80,7 @@ ai_memory_mcp/
 
 ## Quick Start
 
-### Method 1: Docker Deployment (Recommended)
+### Method 1: Docker Deployment
 
 ```bash
 # 1. Enter Docker directory
@@ -313,7 +313,7 @@ Local Mode: `data/` directory in project root
 ### Requirements
 
 - Python 3.12+
-- Conda (recommended)
+- Conda
 - Docker (for containerized deployment)
 
 ### Running Tests

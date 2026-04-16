@@ -11,18 +11,18 @@
 
 ## 项目简介
 
-**AI Memory MCP** 是一个专为 Claude Code 设计的持久化项目记忆 MCP 服务器。它让 AI 能够跨会话记住你的项目开发历程，包括功能规划、Bug 修复、开发笔记、代码规范等关键信息，成为你开发过程中的"第二大脑"。
+**AI Memory MCP** 是一个为 Claude Code 设计的持久化项目记忆 MCP 服务器。它让 AI 能够跨会话记录项目开发历程，包括功能规划、Bug 修复、开发笔记、代码规范等信息。
 
 ### 核心特色
 
 | 特性 | 说明 |
 |------|------|
 | 结构化记忆 | 将项目信息分类为 Features、Fixes、Notes、Standards 四大维度 |
-| 智能关联 | 支持条目间相互关联，构建完整的项目知识图谱 |
-| 标签系统 | 强大的标签管理能力，支持跨维度查询和经验复用 |
-| 三层架构 | MCP Server、FastAPI Server、Business Server 分离，易于扩展 |
-| 全异步设计 | 高性能异步架构，支持高并发访问 |
-| Docker 部署 | 一键容器化部署，数据持久化存储 |
+| 关联系统 | 支持条目间相互关联，构建项目知识图谱 |
+| 标签系统 | 标签管理能力，支持跨维度查询和经验复用 |
+| 三层架构 | MCP Server、FastAPI Server、Business Server 分离 |
+| 异步设计 | 异步架构，支持并发访问 |
+| Docker 部署 | 容器化部署，数据持久化存储 |
 
 ---
 
@@ -80,7 +80,7 @@ ai_memory_mcp/
 
 ## 快速部署
 
-### 方式一：Docker 部署（推荐）
+### 方式一：Docker 部署
 
 ```bash
 # 1. 进入 Docker 目录
@@ -313,7 +313,7 @@ Docker 模式：容器内持久化卷 `/var/lib/project_memory_ai/`
 ### 环境要求
 
 - Python 3.12+
-- Conda（推荐）
+- Conda
 - Docker（用于容器化部署）
 
 ### 运行测试
