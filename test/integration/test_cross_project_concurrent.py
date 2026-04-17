@@ -23,6 +23,7 @@ from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
 from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 from business.core import barrier_decorator
 from business.core.barrier_decorator import BarrierManager
 
@@ -60,7 +61,8 @@ class TestCrossProjectConcurrent:
         barrier_manager = BarrierManager()
         self.storage = Storage(storage_dir=self.temp_dir, barrier_manager=barrier_manager)
         self.groups_service = GroupsService(self.storage)
-        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
+        self.item_validator = ItemValidator(self.storage)
+        self.project_service = ProjectService(self.storage, item_validator=self.item_validator)
         self.tag_service = TagService(self.storage)
 
     async def test_concurrent_register_multiple_projects(self):

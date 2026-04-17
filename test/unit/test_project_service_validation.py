@@ -14,7 +14,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.business.project_service import ProjectService
-from src.business.groups_service import GroupsService
+from src.business.item_validator import ItemValidator
 from src.models.group import UnifiedGroupConfig
 
 
@@ -26,8 +26,8 @@ def create_mock_storage():
     return storage
 
 
-def create_mock_groups_service(features_config=None, fixes_config=None):
-    """创建模拟的 groups_service 对象."""
+def create_mock_item_validator(features_config=None, fixes_config=None):
+    """创建模拟的 item_validator 对象."""
     mock_service = MagicMock()
 
     # 配置 get_all_configs 返回值
@@ -65,14 +65,14 @@ def create_mock_groups_service(features_config=None, fixes_config=None):
     return mock_service
 
 
-def create_project_service(storage=None, groups_service=None):
+def create_project_service(storage=None, item_validator=None):
     """创建 ProjectService 实例."""
     if storage is None:
         storage = create_mock_storage()
-    if groups_service is None:
-        groups_service = create_mock_groups_service()
+    if item_validator is None:
+        item_validator = create_mock_item_validator()
 
-    return ProjectService(storage, groups_service)
+    return ProjectService(storage, item_validator=item_validator)
 
 
 # ==================== Status 验证测试 ====================
@@ -282,8 +282,8 @@ async def test_validate_update_item_custom_status_values():
         severity_values=["urgent", "normal"]
     )
 
-    groups_service = create_mock_groups_service(features_config=custom_config)
-    service = create_project_service(groups_service=groups_service)
+    item_validator = create_mock_item_validator(features_config=custom_config)
+    service = create_project_service(item_validator=item_validator)
 
     # 测试自定义 status 值有效
     result = await service.validate_update_item(
@@ -322,8 +322,8 @@ async def test_validate_update_item_custom_severity_values():
         severity_values=["urgent", "normal", "trivial"]
     )
 
-    groups_service = create_mock_groups_service(fixes_config=custom_config)
-    service = create_project_service(groups_service=groups_service)
+    item_validator = create_mock_item_validator(fixes_config=custom_config)
+    service = create_project_service(item_validator=item_validator)
 
     # 测试自定义 severity 值有效
     result = await service.validate_update_item(
@@ -406,12 +406,12 @@ async def test_validate_update_item_disabled_status_severity():
         enable_severity=False
     )
 
-    groups_service = create_mock_groups_service()
-    groups_service.get_all_configs = AsyncMock(return_value={
+    item_validator = create_mock_item_validator()
+    item_validator.get_all_configs = AsyncMock(return_value={
         "notes": notes_config
     })
 
-    service = create_project_service(groups_service=groups_service)
+    service = create_project_service(item_validator=item_validator)
 
     # 测试在禁用 status 的分组传入 status
     result = await service.validate_update_item(

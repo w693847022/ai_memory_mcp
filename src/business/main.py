@@ -43,12 +43,14 @@ from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
 from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 from business.stats_service import StatsService
 
 # 初始化 business 层服务
 _storage = Storage(storage_dir=storage_dir)
 _groups_service = GroupsService(_storage)
-_project_service = ProjectService(_storage, groups_service=_groups_service)
+_item_validator = ItemValidator(_storage)
+_project_service = ProjectService(_storage, item_validator=_item_validator)
 _tag_service = TagService(_storage)
 _stats_service = StatsService(_storage)
 

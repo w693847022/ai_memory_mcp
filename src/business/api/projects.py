@@ -9,7 +9,7 @@ from src.models.group import (
     CONTENT_SEPARATE_GROUPS,
     DEFAULT_GROUP_CONFIGS,
 )
-from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 from business.core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode, parse_tags, validate_date, filter_tags_by_regex
 from src.models import ApiResponse
 
@@ -231,7 +231,7 @@ async def project_tags_info(
         data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])}
         return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签").to_dict()
     else:
-        is_valid, error_msg = GroupsService.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
+        is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
         result = await _get_tag_service().list_group_tags(project_id, group_name)
@@ -317,7 +317,7 @@ async def project_get(
     data = result["data"]
 
     if group_name:
-        is_valid, error_msg = GroupsService.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
+        is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
 
@@ -504,7 +504,7 @@ async def project_update(
 @router.delete("/projects/{project_id}/items/{item_id}")
 async def project_delete(project_id: str, group: str, item_id: str):
     """删除项目条目."""
-    is_valid, error_msg = GroupsService.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
+    is_valid, error_msg = ItemValidator.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
     if not item_id:
@@ -538,7 +538,7 @@ async def manage_item_tags(
     tags: str = ""
 ):
     """管理条目标签."""
-    is_valid, error_msg = GroupsService.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
+    is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
 

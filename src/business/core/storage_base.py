@@ -681,7 +681,7 @@ class ProjectStorage:
             archive_dir.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_name = f"{timestamp}_{project_name or old_path.name}"
+            archive_name = f"{timestamp}_{old_path.name}"
             archived_path = archive_dir / archive_name
 
             shutil.move(str(old_path), str(archived_path))
@@ -718,6 +718,32 @@ class ProjectStorage:
             return True
         except OSError:
             return False
+
+    def _compress_archived_dir(self, archived_path: Optional[str]) -> Dict[str, Any]:
+        """将已归档的目录压缩为 tar.gz 并删除原目录."""
+        if not archived_path:
+            return {"success": False, "error": "归档路径为空"}
+
+        archive_path = Path(archived_path)
+        if not archive_path.exists() or not archive_path.is_dir():
+            return {"success": False, "error": f"归档目录不存在: {archived_path}"}
+
+        archive_dir = self._get_archive_dir()
+        compressed_name = f"{archive_path.name}.tar.gz"
+        compressed_path = archive_dir / compressed_name
+
+        try:
+            with tarfile.open(str(compressed_path), "w:gz") as tar:
+                tar.add(str(archive_path), arcname=archive_path.name)
+            shutil.rmtree(archive_path)
+            return {"success": True, "compressed_path": str(compressed_path)}
+        except (OSError, tarfile.TarError) as e:
+            if compressed_path.exists():
+                try:
+                    compressed_path.unlink()
+                except OSError:
+                    pass
+            return {"success": False, "error": f"压缩归档失败: {str(e)}"}
 
     # ==================== 归档管理 ====================
 

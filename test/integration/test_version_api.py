@@ -17,6 +17,7 @@ from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
 from business.groups_service import GroupsService
+from business.item_validator import ItemValidator
 from business.api.projects import init_services, router
 from fastapi import FastAPI
 
@@ -45,7 +46,8 @@ class TestApiVersionControl:
         # 初始化存储和服务
         self.storage = Storage(storage_dir=self.temp_dir)
         self.groups_service = GroupsService(self.storage)
-        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
+        self.item_validator = ItemValidator(self.storage)
+        self.project_service = ProjectService(self.storage, item_validator=self.item_validator)
         self.tag_service = TagService(self.storage)
 
         # 初始化API服务
