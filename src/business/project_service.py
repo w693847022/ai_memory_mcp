@@ -118,7 +118,9 @@ class ProjectService:
             result = self.storage.safe_migrate_project_dir(project_dir, new_dir, new_name)
             if not result["success"]:
                 return ResponseBuilder.error(result.get("error", "重命名失败")).to_dict()
-            self.storage.delete_archive_file(result.get("archived_path"))
+            self.storage.compress_archived_dir(result.get("archived_path"))
+            # 迁移后更新缓存，避免 save_project_data 重建旧目录
+            self.storage._uuid_to_name_cache[project_id] = new_name
 
         # 操作模型
         project_data.metadata.name = new_name

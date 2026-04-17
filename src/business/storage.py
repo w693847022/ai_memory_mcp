@@ -174,3 +174,7 @@ class Storage(ProjectStorage):
     def delete_archive_file(self, archived_path: Optional[str]) -> bool:
         """删除归档文件."""
         return self._delete_archive_file(archived_path)
+
+    def compress_archived_dir(self, archived_path: Optional[str]) -> Dict[str, Any]:
+        """将已归档的目录压缩为 tar.gz."""
+        return self._compress_archived_dir(archived_path)
